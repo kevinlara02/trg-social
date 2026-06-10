@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "trg-social",
+      "runtimeExecutable": "/Users/nicolecaballero/.node/node-v20.18.0-darwin-x64/bin/node",
+      "runtimeArgs": ["node_modules/.bin/vite", "--port", "5176", "--host"],
+      "port": 5176
+    }
+  ]
+}
