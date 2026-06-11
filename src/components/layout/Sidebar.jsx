@@ -13,6 +13,7 @@ const navItems = [
   { to: '/reviews',   icon: Star,            label: 'Reviews' },
   { to: '/inbox',     icon: MessageSquare,   label: 'Inbox' },
   { to: '/publish',   icon: Send,            label: 'Publish' },
+  { to: '/social',    icon: Megaphone,       label: 'Social' },
 ]
 
 const adminItems = [
