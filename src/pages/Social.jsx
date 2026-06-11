@@ -162,8 +162,8 @@ function PostCard({ post }) {
         </div>
         {post.caption && <p className="text-xs text-zinc-400 line-clamp-2 mb-2">{post.caption}</p>}
         <div className="flex items-center gap-3 text-xs text-zinc-500">
-          <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" />{fmtNum(post.likes)}</span>
-          <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" />{fmtNum(post.comments)}</span>
+          {post.likes != null && <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" />{fmtNum(post.likes)}</span>}
+          {post.comments != null && <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" />{fmtNum(post.comments)}</span>}
           <span className="ml-auto">{post.date ? post.date.slice(0, 10) : ''}</span>
         </div>
       </div>

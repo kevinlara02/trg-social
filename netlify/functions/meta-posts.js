@@ -27,7 +27,7 @@ async function fetchRestaurant(r) {
   const [acct, igMedia, fbPosts, fbInfo] = await Promise.all([
     r.ig_id ? api(r.ig_id, { fields: 'username,followers_count,media_count', access_token: r.page_token }) : Promise.resolve({}),
     r.ig_id ? api(`${r.ig_id}/media`, { fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count', limit: '8', access_token: r.page_token }) : Promise.resolve({}),
-    r.page_id ? api(`${r.page_id}/posts`, { fields: 'id,message,full_picture,permalink_url,created_time,likes.summary(true),comments.summary(true)', limit: '6', access_token: r.page_token }) : Promise.resolve({}),
+    r.page_id ? api(`${r.page_id}/posts`, { fields: 'id,message,full_picture,permalink_url,created_time', limit: '6', access_token: r.page_token }) : Promise.resolve({}),
     r.page_id ? api(r.page_id, { fields: 'followers_count,fan_count', access_token: r.page_token }) : Promise.resolve({}),
   ])
 
