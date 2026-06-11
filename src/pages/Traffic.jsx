@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users, Image, AtSign } from 'lucide-react'
+import { Users, Image, AtSign, ThumbsUp } from 'lucide-react'
 import { LOCATIONS } from '../lib/supabase'
 import { PlatformIcon } from '../components/ui/Platform'
 import { getLiveSocial } from '../lib/live'
@@ -22,7 +22,7 @@ export default function Traffic() {
 
   const liveByCode = live ? Object.fromEntries(live.map((r) => [r.code, r])) : null
   const totalFollowers = live ? live.reduce((s, r) => s + (r.ig_followers || 0), 0) : 0
-  const totalPosts = live ? live.reduce((s, r) => s + (r.ig_posts || 0), 0) : 0
+  const totalFbFollowers = live ? live.reduce((s, r) => s + (r.fb_followers || 0), 0) : 0
   const accountsConnected = live ? live.filter((r) => r.ig_handle).length : 0
 
   return (
@@ -45,18 +45,18 @@ export default function Traffic() {
           <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 mb-6 flex gap-3">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 mt-1.5 animate-pulse" />
             <div className="text-sm">
-              <p className="font-medium text-emerald-100">Live from your Instagram accounts.</p>
-              <p className="text-emerald-200/70 mt-0.5">These numbers come straight from each restaurant's Instagram. Website traffic and reach will appear here once Google Analytics is connected.</p>
+              <p className="font-medium text-emerald-100">Live from your Instagram & Facebook accounts.</p>
+              <p className="text-emerald-200/70 mt-0.5">Follower counts come straight from each restaurant's Instagram and Facebook. Website traffic and reach will appear here once Google Analytics is connected.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <Kpi icon={Users} label="Instagram Followers" value={k(totalFollowers)} />
-            <Kpi icon={Image} label="Posts" value={k(totalPosts)} />
+            <Kpi icon={ThumbsUp} label="Facebook Followers" value={k(totalFbFollowers)} />
             <Kpi icon={AtSign} label="Accounts Connected" value={`${accountsConnected}`} />
           </div>
 
-          <Card title="Instagram followers by restaurant" subtitle="Live from your Instagram accounts" badge="LIVE">
+          <Card title="Followers by restaurant" subtitle="Live from your Instagram & Facebook accounts" badge="LIVE">
             <div className="space-y-2">
               {LOCATIONS.map((l) => {
                 const lv = liveByCode ? liveByCode[l.code] : null
@@ -73,6 +73,7 @@ export default function Traffic() {
                         <span className="text-zinc-600">·</span>
                         <span><span className="text-zinc-200 font-medium">{lv.ig_posts ?? '–'}</span> posts</span>
                         {lv.last_post?.date && (<><span className="text-zinc-600">·</span><span>last post {lv.last_post.date.slice(0, 10)}</span></>)}
+                        {lv.fb_followers != null && (<><span className="text-zinc-600">·</span><PlatformIcon platform="facebook" size="sm" /><span><span className="text-zinc-200 font-medium">{k(lv.fb_followers)}</span> FB</span></>)}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 text-xs text-zinc-600"><PlatformIcon platform="instagram" size="sm" /> not connected</span>
