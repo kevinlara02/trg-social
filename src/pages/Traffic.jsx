@@ -51,6 +51,7 @@ export default function Traffic() {
   const followers = liveFollowers != null ? liveFollowers : social.reduce((s, r) => s + r.followers, 0)
   const maxWeb = Math.max(1, ...web.map((r) => r.visits))
   const maxSource = Math.max(1, ...sources.map((r) => r.visits))
+  const webChartData = web.map((r) => ({ name: locationById(r.location_id)?.name || 'Unknown', visits: r.visits, color: locationById(r.location_id)?.color || '#71717a' }))
 
   if (loading) return <div className="p-4 md:p-8 max-w-5xl"><h1 className="text-2xl font-bold text-zinc-50 mb-6">Traffic</h1><p className="text-zinc-500 text-sm">Loading…</p></div>
 
@@ -89,12 +90,14 @@ export default function Traffic() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card title="Website visits by restaurant" subtitle="This month">
           <ResponsiveContainer width="100%" height={220} minHeight={220}>
-            <BarChart data={web.map((r) => ({ name: locationById(r.location_id)?.name || 'Unknown', visits: r.visits, prev: r.prev }))} margin={{ left: -20, right: 0, top: 5, bottom: 40 }}>
+            <BarChart data={webChartData} margin={{ left: -20, right: 0, top: 5, bottom: 40 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
               <XAxis dataKey="name" stroke="#71717a" style={{ fontSize: '10px' }} angle={-45} textAnchor="end" height={70} tick={{ fontSize: 9 }} />
               <YAxis stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} width={30} />
               <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '11px' }} formatter={(value) => k(value)} />
-              <Bar dataKey="visits" fill="#71717a" radius={[8, 8, 0, 0]} />
+              <Bar dataKey="visits" radius={[8, 8, 0, 0]}>
+                {webChartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -125,9 +128,9 @@ export default function Traffic() {
             const fb = social.find((s) => s.location_id === l.id && s.platform === 'facebook')
             const ig = social.find((s) => s.location_id === l.id && s.platform === 'instagram')
             return (
-              <div key={l.id} className="flex items-center gap-3 flex-wrap rounded-xl border border-zinc-800 bg-[#0c0c0e] px-3 py-2.5">
-                <span className="text-sm text-zinc-200 flex items-center gap-2 w-44 shrink-0">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: l.color }} />{l.name}
+              <div key={l.id} className="flex items-center gap-3 flex-wrap rounded-xl border border-zinc-800 bg-[#0c0c0e] px-3 py-2.5" style={{ borderLeftWidth: '4px', borderLeftColor: l.color }}>
+                <span className="text-sm font-medium text-zinc-100 flex items-center gap-2 w-44 shrink-0">
+                  <span className="w-3 h-3 rounded-full" style={{ background: l.color }} />{l.name}
                 </span>
                 {lv ? (
                   <span className="inline-flex items-center gap-2 text-xs text-zinc-400 flex-wrap">

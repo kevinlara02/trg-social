@@ -159,12 +159,14 @@ export default function Dashboard() {
             <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4 md:p-6">
               <h3 className="font-semibold text-zinc-100 mb-4 text-sm md:text-base">Avg Rating by Restaurant</h3>
               <ResponsiveContainer width="100%" height={200} minHeight={200}>
-                <BarChart data={buildRestaurantRatings(reviewsF)} margin={{ left: -20, right: 0, top: 5, bottom: 5 }}>
+                <BarChart data={restaurantRatings} margin={{ left: -20, right: 0, top: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
                   <XAxis dataKey="abbrev" stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} />
                   <YAxis stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} domain={[0, 5]} width={30} />
                   <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} formatter={(value) => value.toFixed(1)} />
-                  <Bar dataKey="rating" fill="#71717a" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="rating" radius={[8, 8, 0, 0]}>
+                    {restaurantRatings.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -367,7 +369,7 @@ function buildRestaurantRatings(reviews) {
     .map((l) => {
       const ratings = byLoc[l.id]
       const avg = ratings.length ? ratings.reduce((s, r) => s + r, 0) / ratings.length : 0
-      return { abbrev: abbrevName(l.name), rating: avg > 0 ? parseFloat(avg.toFixed(1)) : 0 }
+      return { abbrev: abbrevName(l.name), rating: avg > 0 ? parseFloat(avg.toFixed(1)) : 0, color: l.color }
     })
     .filter((d) => d.rating > 0)
 }
