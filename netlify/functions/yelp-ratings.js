@@ -31,7 +31,12 @@ async function fetchBiz(b, key) {
         rating: d.rating ?? null,
         review_count: d.review_count ?? null,
         price: d.price || null,
-        category: d.categories?.[0]?.title || null,
+        categories: (d.categories || []).map((c) => c.title).slice(0, 3),
+        photos: (d.photos || []).slice(0, 3),
+        is_open_now: d.hours?.[0]?.is_open_now ?? null,
+        phone: d.display_phone || null,
+        address: (d.location?.display_address || []).join(', '),
+        transactions: d.transactions || [],
         url: d.url ? d.url.split('?')[0] : null,
       }
     } catch (err) {
