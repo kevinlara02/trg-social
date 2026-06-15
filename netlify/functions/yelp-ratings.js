@@ -20,21 +20,24 @@ const BIZ = [
 ]
 
 async function fetchBiz(b, key) {
-  try {
-    const res = await fetch(`${YELP}/businesses/${b.id}`, { headers: { Authorization: `Bearer ${key}` } })
-    const d = await res.json()
-    if (d.error) return { code: b.code, error: d.error.code }
-    return {
-      code: b.code,
-      yelp_name: d.name || null,
-      rating: d.rating ?? null,
-      review_count: d.review_count ?? null,
-      price: d.price || null,
-      category: d.categories?.[0]?.title || null,
-      url: d.url ? d.url.split('?')[0] : null,
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${YELP}/businesses/${b.id}`, { headers: { Authorization: `Bearer ${key}` } })
+      const d = await res.json()
+      if (d.error) { if (attempt === 0) continue; return { code: b.code, error: d.error.code } }
+      return {
+        code: b.code,
+        yelp_name: d.name || null,
+        rating: d.rating ?? null,
+        review_count: d.review_count ?? null,
+        price: d.price || null,
+        category: d.categories?.[0]?.title || null,
+        url: d.url ? d.url.split('?')[0] : null,
+      }
+    } catch (err) {
+      if (attempt === 0) continue
+      return { code: b.code, error: String(err?.message || err) }
     }
-  } catch (err) {
-    return { code: b.code, error: String(err?.message || err) }
   }
 }
 
@@ -56,6 +59,8 @@ export const handler = async () => {
 
   const restaurants = await Promise.all(BIZ.map((b) => fetchBiz(b, key)))
   const data = { generated_at: new Date().toISOString(), restaurants }
-  CACHE = { at: Date.now(), data }
+  // Only cache a fully-successful result, so a transient miss on one business
+  // doesn't stick for the whole TTL.
+  if (restaurants.every((r) => r.rating != null)) CACHE = { at: Date.now(), data }
   return json(200, { ok: true, cached: false, ...data })
 }
