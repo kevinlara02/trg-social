@@ -1,0 +1,61 @@
+// Returns each TRG restaurant's Yelp rating + review count + link.
+// Yelp's API doesn't expose review TEXT on the standard plan (the /reviews
+// endpoint returns NOT_FOUND), but business details (rating, count, price,
+// url) work fine. Reads YELP_API_KEY from the Netlify env (stays server-side).
+
+const YELP = 'https://api.yelp.com/v3'
+
+let CACHE = { at: 0, data: null }
+const TTL_MS = 30 * 60 * 1000 // 30 minutes (ratings change slowly)
+
+// Confirmed Yelp business IDs for the 7 restaurants (stable).
+const BIZ = [
+  { code: 'TB', id: '9PuUxaDOIoU6jefU36GJtQ' }, // The Benediction by Toast
+  { code: 'TW', id: 'bzLfR98CLaQmXozHihMeUw' }, // Toast on First (Toast Whittier)
+  { code: 'SW', id: 'M98NIJAN2G0a9Fzg0QW4qA' }, // Story (Whittier)
+  { code: 'SA', id: 'h9cHPvG-SUvfWIU4BmmKLQ' }, // Story (Anaheim)
+  { code: 'SB', id: '17Jqi0azp05pI2fVfsPbAg' }, // Toast Kitchen & Bar (Story Brea)
+  { code: 'BM', id: 'ty0Co6l06CtKx2qEFoUGcg' }, // Benny and Mary's
+  { code: 'TD', id: 'VUhI0E-EpKQe7MNgsWeqnA' }, // Toast Downey
+]
+
+async function fetchBiz(b, key) {
+  try {
+    const res = await fetch(`${YELP}/businesses/${b.id}`, { headers: { Authorization: `Bearer ${key}` } })
+    const d = await res.json()
+    if (d.error) return { code: b.code, error: d.error.code }
+    return {
+      code: b.code,
+      yelp_name: d.name || null,
+      rating: d.rating ?? null,
+      review_count: d.review_count ?? null,
+      price: d.price || null,
+      category: d.categories?.[0]?.title || null,
+      url: d.url ? d.url.split('?')[0] : null,
+    }
+  } catch (err) {
+    return { code: b.code, error: String(err?.message || err) }
+  }
+}
+
+function json(statusCode, body) {
+  return {
+    statusCode,
+    headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=900' },
+    body: JSON.stringify(body),
+  }
+}
+
+export const handler = async () => {
+  const key = process.env.YELP_API_KEY
+  if (!key) return json(503, { ok: false, error: 'YELP_API_KEY not configured' })
+
+  if (CACHE.data && Date.now() - CACHE.at < TTL_MS) {
+    return json(200, { ok: true, cached: true, ...CACHE.data })
+  }
+
+  const restaurants = await Promise.all(BIZ.map((b) => fetchBiz(b, key)))
+  const data = { generated_at: new Date().toISOString(), restaurants }
+  CACHE = { at: Date.now(), data }
+  return json(200, { ok: true, cached: false, ...data })
+}

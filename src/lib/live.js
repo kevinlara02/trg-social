@@ -1,6 +1,6 @@
-// Calls the server-side meta-* functions for REAL Facebook/Instagram data.
-// Each returns null if unavailable (e.g. local dev or before the Netlify env
-// var is set), so the UI gracefully falls back / shows an empty state.
+// Calls the server-side functions for REAL Facebook/Instagram/Yelp data.
+// Each returns null if unavailable (e.g. local dev or before the env var is
+// set), so the UI gracefully falls back / shows an empty state.
 
 async function getJson(path, timeoutMs = 8000) {
   try {
@@ -30,6 +30,11 @@ export function getLivePosts() {
 // Recent comments on Instagram + Facebook posts (Inbox page).
 export function getComments() {
   return getJson('/.netlify/functions/meta-comments', 12000)
+}
+
+// Yelp rating + review count + link per restaurant (Reviews page).
+export function getYelp() {
+  return getJson('/.netlify/functions/yelp-ratings', 10000)
 }
 
 // Post a reply to a comment. Returns { ok, id } or { ok:false, error }.
