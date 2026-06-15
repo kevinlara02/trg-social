@@ -26,3 +26,22 @@ export function getLiveSocial() {
 export function getLivePosts() {
   return getJson('/.netlify/functions/meta-posts', 12000)
 }
+
+// Recent comments on Instagram + Facebook posts (Inbox page).
+export function getComments() {
+  return getJson('/.netlify/functions/meta-comments', 12000)
+}
+
+// Post a reply to a comment. Returns { ok, id } or { ok:false, error }.
+export async function replyToComment({ code, network, comment_id, message }) {
+  try {
+    const res = await fetch('/.netlify/functions/meta-comment-reply', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code, network, comment_id, message }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+}

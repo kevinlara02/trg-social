@@ -77,11 +77,18 @@ async function api(path, params) {
 
   console.log('\n2/3  Bajando las paginas con sus tokens permanentes...');
   const accounts = await api('me/accounts', {
-    fields: 'name,access_token,instagram_business_account{id,username}',
+    fields: 'name,access_token',
     access_token: userToken,
     limit: '100',
   });
   const pages = accounts.data || [];
+  // Fetch each page's connected Instagram account separately. Expanding it
+  // inline on /me/accounts for all pages at once trips Graph's "reduce the
+  // amount of data" guard, so we do one light request per page instead.
+  for (const p of pages) {
+    const ig = await api(p.id, { fields: 'instagram_business_account{id,username}', access_token: p.access_token });
+    if (ig && ig.instagram_business_account) p.instagram_business_account = ig.instagram_business_account;
+  }
   console.log(`   OK - ${pages.length} paginas recibidas.`);
 
   console.log('\n3/3  Organizando los 7 restaurantes...');

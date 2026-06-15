@@ -1,145 +1,143 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { MessageSquare, Link2, Reply, Send, Sparkles, Copy, Check, Loader2 } from 'lucide-react'
-import { supabase, LOCATIONS, inboxPlatforms, platformName, locationName } from '../lib/supabase'
-import { DEMO, demoMutate, logActivity } from '../lib/demo'
-import { aiSuggest } from '../lib/suggest'
-import { TEMPLATES } from '../lib/templates'
+import { useEffect, useMemo, useState } from 'react'
+import { MessageSquare, Reply, Send, Loader2, Check, ExternalLink } from 'lucide-react'
+import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PlatformIcon } from '../components/ui/Platform'
-import { Pill } from '../components/ui/Badge'
-import { LocationDot } from '../components/ui/Location'
-import { fmt } from '../lib/datefmt'
+import { TEMPLATES } from '../lib/templates'
+import { getComments, replyToComment } from '../lib/live'
 
-const KIND = {
-  comment: { color: 'blue',   label: 'Comment' },
-  dm:      { color: 'purple', label: 'DM' },
-  form:    { color: 'yellow', label: 'Website inquiry' },
-}
+const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
 
 export default function Inbox() {
   const { isAdmin, scopedLocationId } = useAuth()
-  const [loc, setLoc] = useState(scopedLocationId || null)
-  const [platform, setPlatform] = useState(null)
+  const scopedCode = scopedLocationId ? locationById(scopedLocationId)?.code : null
   const [loading, setLoading] = useState(true)
-  const [messages, setMessages] = useState([])
+  const [data, setData] = useState(null)
+  const [loc, setLoc] = useState(scopedCode || null)
+  const [platform, setPlatform] = useState(null)
+  const [replied, setReplied] = useState({}) // { comment_id: replyText }
 
   useEffect(() => {
     let active = true
-    ;(async () => {
-      setLoading(true)
-      try {
-        const { data } = await supabase.from('messages')
-          .select('id, location_id, platform, kind, author_name, author_handle, body, permalink, message_date, status, reply_body')
-          .order('message_date', { ascending: false })
-        if (active) setMessages(data || [])
-      } catch { if (active) setMessages([]) }
-      finally { if (active) setLoading(false) }
-    })()
+    getComments().then((rows) => { if (active) { setData(rows); setLoading(false) } })
     return () => { active = false }
   }, [])
 
-  const effectiveLoc = isAdmin ? loc : scopedLocationId
-  const filtered = messages.filter((m) =>
-    (!effectiveLoc || m.location_id === effectiveLoc) &&
-    (!platform || m.platform === platform)
-  )
-  const newCount = messages.filter((m) => m.status === 'new').length
+  const comments = useMemo(() => {
+    if (!data) return []
+    let rows = data
+    if (!isAdmin && scopedCode) rows = rows.filter((r) => r.code === scopedCode)
+    if (loc) rows = rows.filter((r) => r.code === loc)
+    return rows
+      .flatMap((r) => (r.comments || []).map((c) => ({ ...c, code: r.code })))
+      .filter((c) => !platform || c.network === platform)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  }, [data, loc, platform, isAdmin, scopedCode])
 
-  function applyReply(message, text) {
-    const patch = { status: 'replied', reply_body: text }
-    if (DEMO) {
-      demoMutate('messages', message.id, patch)
-      const kindWord = message.kind === 'dm' ? 'DM' : message.kind === 'form' ? 'inquiry' : 'comment'
-      logActivity({ action: `replied to a ${platformName(message.platform)} ${kindWord}`, target: message.author_name || message.author_handle || 'a guest', location_id: message.location_id })
-    } else {
-      supabase.from('messages').update(patch).eq('id', message.id)
-    }
-    setMessages((ms) => ms.map((m) => (m.id === message.id ? { ...m, ...patch } : m)))
-  }
+  const unreplied = comments.filter((c) => !replied[c.id]).length
 
   return (
     <div className="p-4 md:p-8 max-w-4xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-zinc-50">Inbox</h1>
-          {newCount > 0 && <span className="text-xs font-semibold text-accent-400 bg-accent-500/10 px-2 py-0.5 rounded-full">{newCount} new</span>}
+          {!loading && data && <span className="text-xs font-semibold text-accent-400 bg-accent-500/10 px-2 py-0.5 rounded-full">{unreplied} comments</span>}
         </div>
-        {isAdmin && (
+        {isAdmin && data && (
           <select
             value={loc || ''}
-            onChange={(e) => setLoc(e.target.value ? Number(e.target.value) : null)}
+            onChange={(e) => setLoc(e.target.value || null)}
             className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-zinc-200"
           >
             <option value="">All Locations</option>
-            {LOCATIONS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            {LOCATIONS.map((l) => <option key={l.id} value={l.code}>{l.name}</option>)}
           </select>
         )}
       </div>
 
-      <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <FilterChip active={platform === null} onClick={() => setPlatform(null)}>All</FilterChip>
-        {inboxPlatforms().map((p) => (
-          <FilterChip key={p.key} active={platform === p.key} onClick={() => setPlatform(p.key)}>
-            <PlatformIcon platform={p.key} size="sm" /> {p.name}
-          </FilterChip>
-        ))}
-      </div>
+      {data && (
+        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 mb-5 flex gap-2.5 items-center">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+          <p className="text-xs text-emerald-200/80">Live comments from your Instagram &amp; Facebook posts. Replies post straight to the platform.</p>
+        </div>
+      )}
+
+      {data && (
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
+          <FilterChip active={platform === null} onClick={() => setPlatform(null)}>All</FilterChip>
+          <FilterChip active={platform === 'instagram'} onClick={() => setPlatform('instagram')}><PlatformIcon platform="instagram" size="sm" /> Instagram</FilterChip>
+          <FilterChip active={platform === 'facebook'} onClick={() => setPlatform('facebook')}><PlatformIcon platform="facebook" size="sm" /> Facebook</FilterChip>
+        </div>
+      )}
 
       {loading ? (
-        <p className="text-zinc-500 text-sm py-10 text-center">Loading…</p>
-      ) : filtered.length === 0 ? (
-        <EmptyState isAdmin={isAdmin} />
+        <p className="text-zinc-500 text-sm py-10 text-center">Loading comments…</p>
+      ) : !data ? (
+        <Unavailable />
+      ) : comments.length === 0 ? (
+        <NoComments />
       ) : (
         <div className="space-y-3">
-          {filtered.map((m) => <MessageCard key={m.id} message={m} onReply={applyReply} />)}
+          {comments.map((c) => (
+            <CommentCard
+              key={c.id}
+              comment={c}
+              repliedText={replied[c.id]}
+              onReplied={(text) => setReplied((prev) => ({ ...prev, [c.id]: text }))}
+            />
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-function MessageCard({ message, onReply }) {
+function CommentCard({ comment, repliedText, onReplied }) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
-  const [copied, setCopied] = useState(false)
-  const [generating, setGenerating] = useState(false)
-  const who = message.author_name || message.author_handle || 'Someone'
-  const kind = KIND[message.kind] || KIND.comment
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState(null)
+  const loc = locByCode(comment.code)
 
-  async function suggest() {
-    setGenerating(true)
-    try {
-      const { text: t } = await aiSuggest({ kind: 'message', item: message, location: locationName(message.location_id) })
-      setText(t)
-    } finally { setGenerating(false) }
+  async function send() {
+    const message = text.trim()
+    if (!message) return
+    setSending(true); setError(null)
+    const res = await replyToComment({ code: comment.code, network: comment.network, comment_id: comment.id, message })
+    setSending(false)
+    if (res?.ok) {
+      onReplied(message); setOpen(false); setText('')
+    } else {
+      setError(res?.error || 'Could not send. Try again.')
+    }
   }
-  function send() { if (!text.trim()) return; onReply(message, text.trim()); setOpen(false); setText('') }
-  async function copy() { try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* clipboard blocked */ } }
 
   return (
-    <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4">
+    <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4" style={{ borderLeftWidth: '4px', borderLeftColor: loc?.color }}>
       <div className="flex items-start gap-3">
-        <PlatformIcon platform={message.platform} />
+        <PlatformIcon platform={comment.network} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
-            <span className="font-semibold text-zinc-100 text-sm">{who}</span>
-            <Pill color={kind.color}>{kind.label}</Pill>
+            <span className="font-semibold text-zinc-100 text-sm">{comment.author}</span>
             <span className="text-xs text-zinc-500 flex items-center gap-1.5">
-              <LocationDot id={message.location_id} /> {locationName(message.location_id)}
+              <span className="w-2 h-2 rounded-full" style={{ background: loc?.color }} /> {loc?.name}
             </span>
-            <span className="ml-auto text-xs text-zinc-600">{fmt(message.message_date)}</span>
+            {comment.post_permalink && (
+              <a href={comment.post_permalink} target="_blank" rel="noreferrer" className="text-xs text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1">
+                <ExternalLink className="w-3 h-3" /> post
+              </a>
+            )}
+            <span className="ml-auto text-xs text-zinc-600">{comment.date ? comment.date.slice(0, 10) : ''}</span>
           </div>
-          <p className="text-sm text-zinc-300 mt-2">{message.body}</p>
+          <p className="text-sm text-zinc-300 mt-2">{comment.text || <span className="text-zinc-600 italic">(no text)</span>}</p>
+          {comment.post_caption && <p className="text-xs text-zinc-600 mt-1 line-clamp-1">on: {comment.post_caption}</p>}
 
-          {message.status === 'replied' && message.reply_body && (
+          {repliedText ? (
             <div className="mt-3 rounded-xl bg-zinc-900 border border-zinc-800 p-3">
-              <p className="text-xs font-medium text-accent-400 mb-1">Your reply</p>
-              <p className="text-sm text-zinc-300">{message.reply_body}</p>
+              <p className="text-xs font-medium text-emerald-400 mb-1 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Replied</p>
+              <p className="text-sm text-zinc-300">{repliedText}</p>
             </div>
-          )}
-
-          {message.status !== 'replied' && (
+          ) : (
             <div className="mt-3">
               {!open ? (
                 <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-300 border border-zinc-700 hover:bg-zinc-800 px-3 py-1.5 rounded-lg">
@@ -152,22 +150,16 @@ function MessageCard({ message, onReply }) {
                     onChange={(e) => setText(e.target.value)}
                     rows={2}
                     autoFocus
-                    placeholder={`Reply to ${who}…`}
+                    placeholder={`Reply to ${comment.author}…`}
                     className="w-full rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-600 text-sm p-3 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500/50"
                   />
+                  {error && <p className="text-xs text-red-400">{error}</p>}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button onClick={suggest} disabled={generating} className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-400 border border-accent-500/30 hover:bg-accent-500/10 disabled:opacity-50 px-3 py-1.5 rounded-lg">
-                      {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                      {generating ? 'Generating…' : 'Suggest'}
-                    </button>
                     <TemplatePicker onPick={setText} />
-                    <button onClick={copy} className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-200 border border-zinc-700 hover:bg-zinc-800 px-3 py-1.5 rounded-lg">
-                      {copied ? <Check className="w-3.5 h-3.5 text-accent-400" /> : <Copy className="w-3.5 h-3.5" />} {copied ? 'Copied!' : 'Copy'}
+                    <button onClick={send} disabled={sending || !text.trim()} className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-400 disabled:opacity-50 text-zinc-950 text-sm font-semibold px-3 py-1.5 rounded-lg">
+                      {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {sending ? 'Sending…' : 'Send reply'}
                     </button>
-                    <button onClick={send} className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-400 text-zinc-950 text-sm font-semibold px-3 py-1.5 rounded-lg">
-                      <Send className="w-3.5 h-3.5" /> Send
-                    </button>
-                    <button onClick={() => { setOpen(false); setText('') }} className="text-sm text-zinc-400 hover:text-zinc-200 px-2 py-1.5">Cancel</button>
+                    <button onClick={() => { setOpen(false); setText(''); setError(null) }} className="text-sm text-zinc-400 hover:text-zinc-200 px-2 py-1.5">Cancel</button>
                   </div>
                 </div>
               )}
@@ -192,19 +184,24 @@ function TemplatePicker({ onPick }) {
   )
 }
 
-function EmptyState({ isAdmin }) {
+function NoComments() {
   return (
     <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-10 text-center">
       <div className="inline-flex items-center justify-center w-12 h-12 bg-zinc-800 rounded-xl mb-3">
         <MessageSquare className="w-6 h-6 text-zinc-400" />
       </div>
-      <p className="text-zinc-100 font-medium">No messages here</p>
-      <p className="text-zinc-500 text-sm mt-1 max-w-md mx-auto">Try a different filter, or connect Facebook, Instagram, and your Squarespace site.</p>
-      {isAdmin && (
-        <Link to="/connections" className="inline-flex items-center gap-2 mt-4 bg-accent-500 hover:bg-accent-400 text-zinc-950 text-sm font-semibold px-4 py-2 rounded-xl transition-colors">
-          <Link2 className="w-4 h-4" /> Go to Connections
-        </Link>
-      )}
+      <p className="text-zinc-100 font-medium">No comments right now</p>
+      <p className="text-zinc-500 text-sm mt-1">New comments on your recent Instagram &amp; Facebook posts will show up here.</p>
+    </div>
+  )
+}
+
+function Unavailable() {
+  return (
+    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-8 text-center">
+      <MessageSquare className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+      <p className="font-medium text-zinc-200">Comments aren't available right now</p>
+      <p className="text-sm text-zinc-500 mt-1">This page shows real Instagram &amp; Facebook comments on the deployed site.</p>
     </div>
   )
 }
