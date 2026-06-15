@@ -80,24 +80,24 @@ export default function Social() {
         <Kpi icon={Heart} label="Recent Engagement" value={fmtNum(recentEng)} />
       </div>
 
+      <Card title="Recent posts" subtitle="Latest across your accounts" className="mb-6">
+        {feed.length ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {feed.map((p) => <PostCard key={p.id} post={p} />)}
+          </div>
+        ) : <Empty label="No posts found" />}
+      </Card>
+
       <Card title="Account health" subtitle="When each restaurant last posted" className="mb-6">
         <div className="space-y-2">
           {restaurants.map((r) => <HealthRow key={r.code} r={r} />)}
         </div>
       </Card>
 
-      <Card title="Top posts" subtitle="Most engagement (likes + comments)" className="mb-6">
+      <Card title="Top posts" subtitle="Most engagement (likes + comments)">
         {topPosts.length ? (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {topPosts.map((p) => <PostCard key={p.id} post={p} />)}
-          </div>
-        ) : <Empty label="No posts found" />}
-      </Card>
-
-      <Card title="Recent posts" subtitle="Latest across your accounts">
-        {feed.length ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {feed.map((p) => <PostCard key={p.id} post={p} />)}
           </div>
         ) : <Empty label="No posts found" />}
       </Card>
