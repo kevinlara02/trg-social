@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Star, ExternalLink, Info, Phone, MapPin, Utensils } from 'lucide-react'
+import { Star, ExternalLink, Info, Phone, MapPin, Utensils, MessageSquare } from 'lucide-react'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { StarRating } from '../components/ui/Badge'
 import { PlatformIcon } from '../components/ui/Platform'
 import { LastUpdated } from '../components/ui/LastUpdated'
 import { Skeleton, KpiSkeleton } from '../components/ui/Skeleton'
+import { BusinessHours } from '../components/ui/BusinessHours'
 import { getYelp } from '../lib/live'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
@@ -100,7 +101,8 @@ export default function Reviews() {
 
 function YelpCard({ r, rank, isLowest }) {
   const l = locByCode(r.code)
-  const photo = r.photos?.[0]
+  const photo = r.photos?.[0] || r.image_url
+  const coords = r.coordinates
   return (
     <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4" style={{ borderLeftWidth: '4px', borderLeftColor: l?.color }}>
       <div className="flex gap-3">
@@ -116,6 +118,7 @@ function YelpCard({ r, rank, isLowest }) {
               <span className="w-2.5 h-2.5 rounded-full" style={{ background: l?.color }} />{l?.name}
             </span>
             {isLowest && <span className="text-[10px] font-semibold uppercase tracking-wide text-red-400 bg-red-500/10 rounded px-1.5 py-0.5">Lowest rated</span>}
+            {r.is_claimed === false && <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5">Unclaimed</span>}
             {r.is_open_now === true && <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400 bg-emerald-500/10 rounded px-1.5 py-0.5">Open now</span>}
             {r.is_open_now === false && <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-800 rounded px-1.5 py-0.5">Closed</span>}
             <a href={r.url || '#'} target="_blank" rel="noreferrer" className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-accent-400 hover:text-accent-300">
@@ -139,6 +142,21 @@ function YelpCard({ r, rank, isLowest }) {
           <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-1 text-xs text-zinc-500">
             {r.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {r.phone}</span>}
             {r.address && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 shrink-0" /> <span className="truncate">{r.address}</span></span>}
+          </div>
+
+          <BusinessHours open={r.hours} />
+
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2 text-xs">
+            {coords && (
+              <a href={`https://www.google.com/maps/dir/?api=1&destination=${coords.latitude},${coords.longitude}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-zinc-400 hover:text-zinc-200">
+                <MapPin className="w-3 h-3" /> Directions
+              </a>
+            )}
+            {r.messaging_url && (
+              <a href={r.messaging_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-zinc-400 hover:text-zinc-200">
+                <MessageSquare className="w-3 h-3" /> Message on Yelp
+              </a>
+            )}
           </div>
         </div>
       </div>

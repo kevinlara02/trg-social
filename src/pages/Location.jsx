@@ -6,6 +6,7 @@ import { StarRating } from '../components/ui/Badge'
 import { PlatformIcon } from '../components/ui/Platform'
 import { LastUpdated } from '../components/ui/LastUpdated'
 import { Skeleton, KpiSkeleton } from '../components/ui/Skeleton'
+import { BusinessHours } from '../components/ui/BusinessHours'
 import { getYelp, getLivePosts, getComments } from '../lib/live'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
@@ -80,11 +81,25 @@ export default function Location() {
                 {y.price && <span className="text-xs text-zinc-500">{y.price}</span>}
                 {y.is_open_now === true && <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400 bg-emerald-500/10 rounded px-1.5 py-0.5">Open now</span>}
                 {y.is_open_now === false && <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 bg-zinc-800 rounded px-1.5 py-0.5">Closed</span>}
+                {y.is_claimed === false && <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5">Unclaimed</span>}
               </div>
               <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2 text-xs text-zinc-500">
                 {y.transactions?.length > 0 && <span>{y.transactions.map((t) => TX_LABEL[t] || t).join(' · ')}</span>}
                 {y.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {y.phone}</span>}
                 {y.address && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 shrink-0" /> <span className="truncate">{y.address}</span></span>}
+              </div>
+              <BusinessHours open={y.hours} />
+              <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-2 text-xs">
+                {y.coordinates && (
+                  <a href={`https://www.google.com/maps/dir/?api=1&destination=${y.coordinates.latitude},${y.coordinates.longitude}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-zinc-400 hover:text-zinc-200">
+                    <MapPin className="w-3 h-3" /> Directions
+                  </a>
+                )}
+                {y.messaging_url && (
+                  <a href={y.messaging_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-zinc-400 hover:text-zinc-200">
+                    <MessageCircle className="w-3 h-3" /> Message on Yelp
+                  </a>
+                )}
               </div>
             </section>
           )}
