@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Trophy, AlertTriangle, Users, Star } from 'lucide-react'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -103,10 +104,10 @@ export default function Reports() {
                   {rows.map((r) => (
                     <tr key={r.code} className="border-b border-zinc-800/60 last:border-0">
                       <td className="py-3 px-5" style={{ borderLeft: `4px solid ${r.color}` }}>
-                        <span className="inline-flex items-center gap-2 font-medium text-zinc-200">
+                        <Link to={`/locations/${r.code}`} className="inline-flex items-center gap-2 font-medium text-zinc-200 hover:text-accent-400">
                           <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: r.color }} />
                           {r.name}
-                        </span>
+                        </Link>
                       </td>
                       <td className="py-3 px-3 text-right">
                         {r.rating != null

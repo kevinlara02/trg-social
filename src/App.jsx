@@ -13,6 +13,7 @@ import Activity from './pages/Activity'
 import AIVisibility from './pages/AIVisibility'
 import Traffic from './pages/Traffic'
 import Social from './pages/Social'
+import Location from './pages/Location'
 
 function FullScreenSpinner() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="inbox"     element={<Inbox />} />
             <Route path="publish"   element={<Publish />} />
             <Route path="social"    element={<Social />} />
+            <Route path="locations/:code" element={<Location />} />
             <Route path="connections" element={<ProtectedRoute adminOnly><Connections /></ProtectedRoute>} />
             <Route path="reports"       element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />
             <Route path="ai-visibility" element={<ProtectedRoute adminOnly><AIVisibility /></ProtectedRoute>} />
