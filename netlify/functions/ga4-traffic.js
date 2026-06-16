@@ -2,6 +2,7 @@
 // restaurant's Squarespace site. Needs a service account (GOOGLE_SA_JSON) with
 // Viewer access on each GA4 property (the property IDs are hardcoded below).
 // Note: GA4 uses the numeric PROPERTY ID, not the "G-XXXX" measurement ID.
+// (GOOGLE_SA_JSON wired 2026-06-16)
 import { getAccessToken } from '../google-auth.js'
 
 const SCOPE = 'https://www.googleapis.com/auth/analytics.readonly'
