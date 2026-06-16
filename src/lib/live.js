@@ -37,6 +37,11 @@ export function getYelp() {
   return getJson('/.netlify/functions/yelp-ratings', 10000)
 }
 
+// Website traffic per restaurant from Google Analytics 4 (Traffic page).
+export function getGa4() {
+  return getJson('/.netlify/functions/ga4-traffic', 12000)
+}
+
 // Daily history of ratings + follower counts (Trends page). Returns an array
 // of { date, restaurants:[{ code, rating, reviews, ig, fb }] } or null.
 export async function getTrends(timeoutMs = 10000) {

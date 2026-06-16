@@ -4,7 +4,7 @@ import { LOCATIONS } from '../lib/supabase'
 import { PlatformIcon } from '../components/ui/Platform'
 import { LastUpdated } from '../components/ui/LastUpdated'
 import { KpiSkeleton, ListSkeleton } from '../components/ui/Skeleton'
-import { getLiveSocial } from '../lib/live'
+import { getLiveSocial, getGa4 } from '../lib/live'
 
 function k(n) {
   if (n == null) return '–'
@@ -15,17 +15,21 @@ function k(n) {
 export default function Traffic() {
   const [loading, setLoading] = useState(true)
   const [live, setLive] = useState(null) // real Instagram data, or null
+  const [ga4, setGa4] = useState(null) // website traffic from GA4, or null
   const [updatedAt, setUpdatedAt] = useState(null)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
     setLoading(true)
-    getLiveSocial().then((rows) => { if (active) { setLive(rows); setUpdatedAt(Date.now()); setLoading(false) } })
+    Promise.all([getLiveSocial(), getGa4()]).then(([rows, ga]) => {
+      if (active) { setLive(rows); setGa4(ga); setUpdatedAt(Date.now()); setLoading(false) }
+    })
     return () => { active = false }
   }, [tick])
 
   const liveByCode = live ? Object.fromEntries(live.map((r) => [r.code, r])) : null
+  const ga4ByCode = ga4 ? Object.fromEntries(ga4.map((r) => [r.code, r])) : null
   const totalFollowers = live ? live.reduce((s, r) => s + (r.ig_followers || 0), 0) : 0
   const totalFbFollowers = live ? live.reduce((s, r) => s + (r.fb_followers || 0), 0) : 0
   const accountsConnected = live ? live.filter((r) => r.ig_handle).length : 0
@@ -91,6 +95,31 @@ export default function Traffic() {
               })}
             </div>
           </Card>
+
+          {ga4ByCode && ga4.length > 0 && (
+            <Card title="Website traffic" subtitle="Last 28 days, from Google Analytics" badge="GA4" className="mt-6">
+              <div className="space-y-2">
+                {LOCATIONS.filter((l) => ga4ByCode[l.code] && !ga4ByCode[l.code].error).map((l) => {
+                  const g = ga4ByCode[l.code]
+                  return (
+                    <div key={l.id} className="flex items-center gap-3 flex-wrap rounded-xl border border-zinc-800 bg-[#0c0c0e] px-3 py-2.5" style={{ borderLeftWidth: '4px', borderLeftColor: l.color }}>
+                      <span className="text-sm font-medium text-zinc-100 flex items-center gap-2 w-44 shrink-0">
+                        <span className="w-3 h-3 rounded-full" style={{ background: l.color }} />{l.name}
+                      </span>
+                      <span className="inline-flex items-center gap-x-3 gap-y-1 flex-wrap text-xs text-zinc-400">
+                        <span><span className="text-zinc-50 font-semibold">{k(g.users)}</span> visitors</span>
+                        <span className="text-zinc-600">·</span>
+                        <span><span className="text-zinc-200 font-medium">{k(g.sessions)}</span> visits</span>
+                        <span className="text-zinc-600">·</span>
+                        <span><span className="text-zinc-200 font-medium">{k(g.pageviews)}</span> views</span>
+                        {g.sources?.[0] && (<><span className="text-zinc-600">·</span><span>top: {g.sources[0].channel}</span></>)}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          )}
         </>
       )}
     </div>
