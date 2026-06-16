@@ -4,6 +4,8 @@ import { Trophy, AlertTriangle, Users, Star } from 'lucide-react'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { StarRating } from '../components/ui/Badge'
+import { LastUpdated } from '../components/ui/LastUpdated'
+import { Skeleton, KpiSkeleton } from '../components/ui/Skeleton'
 import { getYelp, getLivePosts } from '../lib/live'
 
 const fmtNum = (n) => (n == null ? '–' : Number(n).toLocaleString('en-US'))
@@ -15,14 +17,17 @@ export default function Reports() {
   const [loading, setLoading] = useState(true)
   const [yelp, setYelp] = useState(null)
   const [posts, setPosts] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
+    setLoading(true)
     Promise.all([getYelp(), getLivePosts()]).then(([y, p]) => {
-      if (active) { setYelp(y); setPosts(p); setLoading(false) }
+      if (active) { setYelp(y); setPosts(p); setUpdatedAt(Date.now()); setLoading(false) }
     })
     return () => { active = false }
-  }, [])
+  }, [tick])
 
   const inScope = (code) => isAdmin || !scopedCode || code === scopedCode
   const yelpBy = useMemo(() => Object.fromEntries((yelp || []).map((r) => [r.code, r])), [yelp])
@@ -48,13 +53,19 @@ export default function Reports() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-50">Reports</h1>
-        <p className="text-zinc-500 mt-1">All your restaurants, side by side.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-50">Reports</h1>
+          <p className="text-zinc-500 mt-1">All your restaurants, side by side.</p>
+        </div>
+        <div className="pt-1"><LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} /></div>
       </div>
 
-      {loading ? (
-        <p className="text-zinc-500 text-sm py-10 text-center">Loading report…</p>
+      {loading && !hasData ? (
+        <>
+          <KpiSkeleton count={4} />
+          <Skeleton className="h-64 w-full rounded-2xl" />
+        </>
       ) : !hasData ? (
         <Unavailable />
       ) : (

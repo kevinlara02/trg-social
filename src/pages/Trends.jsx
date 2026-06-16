@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { TrendingUp, Star, Users, MessageSquare } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { LastUpdated } from '../components/ui/LastUpdated'
+import { KpiSkeleton, ChartSkeleton } from '../components/ui/Skeleton'
 import { getTrends } from '../lib/live'
 
 const TOOLTIP = { background: '#18181b', border: '1px solid #3f3f46', borderRadius: 12, color: '#e4e4e7', fontSize: 13 }
@@ -10,12 +12,15 @@ const fmtDay = (d) => { try { return new Date(d + 'T00:00:00').toLocaleDateStrin
 export default function Trends() {
   const [loading, setLoading] = useState(true)
   const [history, setHistory] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
-    getTrends().then((h) => { if (active) { setHistory(h); setLoading(false) } })
+    setLoading(true)
+    getTrends().then((h) => { if (active) { setHistory(h); setUpdatedAt(Date.now()); setLoading(false) } })
     return () => { active = false }
-  }, [])
+  }, [tick])
 
   const series = useMemo(() => {
     if (!history) return []
@@ -40,13 +45,19 @@ export default function Trends() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-50">Trends</h1>
-        <p className="text-zinc-500 mt-1">How your ratings and followers change over time.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-50">Trends</h1>
+          <p className="text-zinc-500 mt-1">How your ratings and followers change over time.</p>
+        </div>
+        <div className="pt-1"><LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} /></div>
       </div>
 
-      {loading ? (
-        <p className="text-zinc-500 text-sm py-10 text-center">Loading trends…</p>
+      {loading && !history ? (
+        <>
+          <KpiSkeleton count={4} />
+          <div className="space-y-6"><ChartSkeleton height={260} /><ChartSkeleton height={220} /></div>
+        </>
       ) : !history ? (
         <Unavailable />
       ) : (

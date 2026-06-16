@@ -1,20 +1,24 @@
+import { lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { Layout } from './components/layout/Layout'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Reviews from './pages/Reviews'
-import Inbox from './pages/Inbox'
-import Publish from './pages/Publish'
-import Connections from './pages/Connections'
-import Reports from './pages/Reports'
-import Users from './pages/Users'
-import Activity from './pages/Activity'
-import AIVisibility from './pages/AIVisibility'
-import Traffic from './pages/Traffic'
-import Social from './pages/Social'
-import Location from './pages/Location'
-import Trends from './pages/Trends'
+
+// Lazy-loaded so each page ships as its own chunk (faster initial load,
+// heavy libs like recharts only download on the pages that use them).
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Reviews = lazy(() => import('./pages/Reviews'))
+const Inbox = lazy(() => import('./pages/Inbox'))
+const Publish = lazy(() => import('./pages/Publish'))
+const Connections = lazy(() => import('./pages/Connections'))
+const Reports = lazy(() => import('./pages/Reports'))
+const Users = lazy(() => import('./pages/Users'))
+const Activity = lazy(() => import('./pages/Activity'))
+const AIVisibility = lazy(() => import('./pages/AIVisibility'))
+const Traffic = lazy(() => import('./pages/Traffic'))
+const Social = lazy(() => import('./pages/Social'))
+const Location = lazy(() => import('./pages/Location'))
+const Trends = lazy(() => import('./pages/Trends'))
 
 function FullScreenSpinner() {
   return (

@@ -3,6 +3,8 @@ import { Users, Heart, MessageCircle, Image as ImageIcon } from 'lucide-react'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PlatformIcon } from '../components/ui/Platform'
+import { LastUpdated } from '../components/ui/LastUpdated'
+import { Skeleton, KpiSkeleton } from '../components/ui/Skeleton'
 import { getLivePosts } from '../lib/live'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
@@ -16,12 +18,15 @@ export default function Social() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [sel, setSel] = useState(scopedCode || null)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
-    getLivePosts().then((rows) => { if (active) { setData(rows); setLoading(false) } })
+    setLoading(true)
+    getLivePosts().then((rows) => { if (active) { setData(rows); setUpdatedAt(Date.now()); setLoading(false) } })
     return () => { active = false }
-  }, [])
+  }, [tick])
 
   const restaurants = useMemo(() => {
     if (!data) return []
@@ -43,10 +48,35 @@ export default function Social() {
   const topPosts = [...allPosts].sort((a, b) => eng(b) - eng(a)).slice(0, 6)
   const feed = [...allPosts].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 24)
 
-  if (loading) return <Shell><p className="text-zinc-500 text-sm">Loading live posts…</p></Shell>
+  const right = (
+    <>
+      <LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} />
+      {isAdmin && data && (
+        <select
+          value={sel || ''}
+          onChange={(e) => setSel(e.target.value || null)}
+          className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-zinc-200"
+        >
+          <option value="">All Locations</option>
+          {LOCATIONS.map((l) => <option key={l.id} value={l.code}>{l.name}</option>)}
+        </select>
+      )}
+    </>
+  )
+
+  if (loading && !data) {
+    return (
+      <Shell right={right}>
+        <KpiSkeleton count={3} />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="aspect-square w-full rounded-xl" />)}
+        </div>
+      </Shell>
+    )
+  }
   if (!data) {
     return (
-      <Shell>
+      <Shell right={right}>
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-8 text-center">
           <ImageIcon className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
           <p className="font-medium text-zinc-200">Live posts aren't available right now</p>
@@ -57,18 +87,7 @@ export default function Social() {
   }
 
   return (
-    <Shell
-      filter={isAdmin ? (
-        <select
-          value={sel || ''}
-          onChange={(e) => setSel(e.target.value || null)}
-          className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-zinc-200"
-        >
-          <option value="">All Locations</option>
-          {LOCATIONS.map((l) => <option key={l.id} value={l.code}>{l.name}</option>)}
-        </select>
-      ) : null}
-    >
+    <Shell right={right}>
       <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 mb-6 flex gap-3">
         <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 mt-1.5 animate-pulse" />
         <p className="text-sm text-emerald-200/80"><span className="font-medium text-emerald-100">Live from Instagram &amp; Facebook.</span> Real posts and engagement, pulled straight from your accounts.</p>
@@ -105,7 +124,7 @@ export default function Social() {
   )
 }
 
-function Shell({ children, filter }) {
+function Shell({ children, right }) {
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
@@ -113,7 +132,7 @@ function Shell({ children, filter }) {
           <h1 className="text-2xl font-bold text-zinc-50">Social</h1>
           <p className="text-zinc-500 mt-1">Live posts and engagement from Instagram &amp; Facebook.</p>
         </div>
-        {filter}
+        {right && <div className="flex items-center gap-3">{right}</div>}
       </div>
       {children}
     </div>

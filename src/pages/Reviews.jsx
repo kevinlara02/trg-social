@@ -4,6 +4,8 @@ import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { StarRating } from '../components/ui/Badge'
 import { PlatformIcon } from '../components/ui/Platform'
+import { LastUpdated } from '../components/ui/LastUpdated'
+import { Skeleton, KpiSkeleton } from '../components/ui/Skeleton'
 import { getYelp } from '../lib/live'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
@@ -16,12 +18,15 @@ export default function Reviews() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [loc, setLoc] = useState(scopedCode || null)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
-    getYelp().then((rows) => { if (active) { setData(rows); setLoading(false) } })
+    setLoading(true)
+    getYelp().then((rows) => { if (active) { setData(rows); setUpdatedAt(Date.now()); setLoading(false) } })
     return () => { active = false }
-  }, [])
+  }, [tick])
 
   const rows = useMemo(() => {
     if (!data) return []
@@ -43,16 +48,22 @@ export default function Reviews() {
           <h1 className="text-2xl font-bold text-zinc-50">Reviews</h1>
           <p className="text-zinc-500 mt-1">Your Yelp ratings, ranked across all locations.</p>
         </div>
-        {isAdmin && data && (
-          <select value={loc || ''} onChange={(e) => setLoc(e.target.value || null)} className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-zinc-200">
-            <option value="">All Locations</option>
-            {LOCATIONS.map((l) => <option key={l.id} value={l.code}>{l.name}</option>)}
-          </select>
-        )}
+        <div className="flex items-center gap-3">
+          <LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} />
+          {isAdmin && data && (
+            <select value={loc || ''} onChange={(e) => setLoc(e.target.value || null)} className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-zinc-200">
+              <option value="">All Locations</option>
+              {LOCATIONS.map((l) => <option key={l.id} value={l.code}>{l.name}</option>)}
+            </select>
+          )}
+        </div>
       </div>
 
-      {loading ? (
-        <p className="text-zinc-500 text-sm py-10 text-center">Loading Yelp data…</p>
+      {loading && !data ? (
+        <>
+          <KpiSkeleton count={3} />
+          <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-28 w-full rounded-2xl" />)}</div>
+        </>
       ) : !data ? (
         <Unavailable />
       ) : (

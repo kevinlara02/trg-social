@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Users, Image, AtSign, ThumbsUp } from 'lucide-react'
 import { LOCATIONS } from '../lib/supabase'
 import { PlatformIcon } from '../components/ui/Platform'
+import { LastUpdated } from '../components/ui/LastUpdated'
+import { KpiSkeleton, ListSkeleton } from '../components/ui/Skeleton'
 import { getLiveSocial } from '../lib/live'
 
 function k(n) {
@@ -13,12 +15,15 @@ function k(n) {
 export default function Traffic() {
   const [loading, setLoading] = useState(true)
   const [live, setLive] = useState(null) // real Instagram data, or null
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
-    getLiveSocial().then((rows) => { if (active) { setLive(rows); setLoading(false) } })
+    setLoading(true)
+    getLiveSocial().then((rows) => { if (active) { setLive(rows); setUpdatedAt(Date.now()); setLoading(false) } })
     return () => { active = false }
-  }, [])
+  }, [tick])
 
   const liveByCode = live ? Object.fromEntries(live.map((r) => [r.code, r])) : null
   const totalFollowers = live ? live.reduce((s, r) => s + (r.ig_followers || 0), 0) : 0
@@ -27,13 +32,16 @@ export default function Traffic() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-50">Traffic</h1>
-        <p className="text-zinc-500 mt-1">Live social profile stats from your Instagram accounts.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-50">Traffic</h1>
+          <p className="text-zinc-500 mt-1">Live social profile stats from your Instagram accounts.</p>
+        </div>
+        <div className="pt-1"><LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} /></div>
       </div>
 
-      {loading ? (
-        <p className="text-zinc-500 text-sm">Loading live data…</p>
+      {loading && !live ? (
+        <><KpiSkeleton count={3} /><ListSkeleton rows={7} /></>
       ) : !live ? (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-8 text-center">
           <Image className="w-8 h-8 text-zinc-600 mx-auto mb-3" />

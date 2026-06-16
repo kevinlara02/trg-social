@@ -4,6 +4,8 @@ import { ArrowLeft, ExternalLink, Phone, MapPin, Heart, MessageCircle, Image as 
 import { LOCATIONS } from '../lib/supabase'
 import { StarRating } from '../components/ui/Badge'
 import { PlatformIcon } from '../components/ui/Platform'
+import { LastUpdated } from '../components/ui/LastUpdated'
+import { Skeleton, KpiSkeleton } from '../components/ui/Skeleton'
 import { getYelp, getLivePosts, getComments } from '../lib/live'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
@@ -15,15 +17,17 @@ export default function Location() {
   const loc = locByCode(code)
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState({ yelp: null, posts: null, comments: null })
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
     setLoading(true)
     Promise.all([getYelp(), getLivePosts(), getComments()]).then(([yelp, posts, comments]) => {
-      if (active) { setData({ yelp, posts, comments }); setLoading(false) }
+      if (active) { setData({ yelp, posts, comments }); setUpdatedAt(Date.now()); setLoading(false) }
     })
     return () => { active = false }
-  }, [code])
+  }, [code, tick])
 
   if (!loc) {
     return (
@@ -47,10 +51,14 @@ export default function Location() {
         <span className="w-4 h-4 rounded-full" style={{ background: loc.color }} />
         <h1 className="text-2xl font-bold text-zinc-50">{loc.name}</h1>
         {y?.category && <span className="text-sm text-zinc-500">{y.category}</span>}
+        <div className="ml-auto"><LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} /></div>
       </div>
 
-      {loading ? (
-        <p className="text-zinc-500 text-sm py-10 text-center">Loading…</p>
+      {loading && !updatedAt ? (
+        <>
+          <KpiSkeleton count={4} />
+          <Skeleton className="h-32 w-full rounded-2xl" />
+        </>
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

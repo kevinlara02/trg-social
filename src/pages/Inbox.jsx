@@ -3,6 +3,8 @@ import { MessageSquare, Reply, Send, Loader2, Check, ExternalLink } from 'lucide
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PlatformIcon } from '../components/ui/Platform'
+import { LastUpdated } from '../components/ui/LastUpdated'
+import { ListSkeleton } from '../components/ui/Skeleton'
 import { TEMPLATES } from '../lib/templates'
 import { getComments, replyToComment } from '../lib/live'
 
@@ -16,12 +18,15 @@ export default function Inbox() {
   const [loc, setLoc] = useState(scopedCode || null)
   const [platform, setPlatform] = useState(null)
   const [replied, setReplied] = useState({}) // { comment_id: replyText }
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
-    getComments().then((rows) => { if (active) { setData(rows); setLoading(false) } })
+    setLoading(true)
+    getComments().then((rows) => { if (active) { setData(rows); setUpdatedAt(Date.now()); setLoading(false) } })
     return () => { active = false }
-  }, [])
+  }, [tick])
 
   const comments = useMemo(() => {
     if (!data) return []
@@ -43,16 +48,19 @@ export default function Inbox() {
           <h1 className="text-2xl font-bold text-zinc-50">Inbox</h1>
           {!loading && data && <span className="text-xs font-semibold text-accent-400 bg-accent-500/10 px-2 py-0.5 rounded-full">{unreplied} comments</span>}
         </div>
-        {isAdmin && data && (
-          <select
-            value={loc || ''}
-            onChange={(e) => setLoc(e.target.value || null)}
-            className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-zinc-200"
-          >
-            <option value="">All Locations</option>
-            {LOCATIONS.map((l) => <option key={l.id} value={l.code}>{l.name}</option>)}
-          </select>
-        )}
+        <div className="flex items-center gap-3">
+          <LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} />
+          {isAdmin && data && (
+            <select
+              value={loc || ''}
+              onChange={(e) => setLoc(e.target.value || null)}
+              className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-zinc-200"
+            >
+              <option value="">All Locations</option>
+              {LOCATIONS.map((l) => <option key={l.id} value={l.code}>{l.name}</option>)}
+            </select>
+          )}
+        </div>
       </div>
 
       {data && (
@@ -70,8 +78,8 @@ export default function Inbox() {
         </div>
       )}
 
-      {loading ? (
-        <p className="text-zinc-500 text-sm py-10 text-center">Loading comments…</p>
+      {loading && !data ? (
+        <ListSkeleton rows={5} />
       ) : !data ? (
         <Unavailable />
       ) : comments.length === 0 ? (

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Star, Users, Heart, Image as ImageIcon, AlertTriangle, ArrowRight } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Star, Users, Heart, Image as ImageIcon, AlertTriangle, ArrowRight, TrendingUp } from 'lucide-react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PlatformIcon } from '../components/ui/Platform'
+import { LastUpdated } from '../components/ui/LastUpdated'
+import { KpiSkeleton, ChartSkeleton } from '../components/ui/Skeleton'
 import { getYelp, getLivePosts } from '../lib/live'
 
 const fmtNum = (n) => (n == null ? '–' : n >= 1000 ? (n / 1000).toFixed(1).replace('.0', '') + 'k' : `${n}`)
@@ -13,17 +15,23 @@ const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
 export default function Dashboard() {
   const { isAdmin, scopedLocationId } = useAuth()
   const scopedCode = scopedLocationId ? locationById(scopedLocationId)?.code : null
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [yelp, setYelp] = useState(null)
   const [posts, setPosts] = useState(null)
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
+    setLoading(true)
     Promise.all([getYelp(), getLivePosts()]).then(([y, p]) => {
-      if (active) { setYelp(y); setPosts(p); setLoading(false) }
+      if (active) { setYelp(y); setPosts(p); setUpdatedAt(Date.now()); setLoading(false) }
     })
     return () => { active = false }
-  }, [])
+  }, [tick])
+
+  const goToLocation = (d) => { const code = d?.name || d?.payload?.name; if (code) navigate(`/locations/${code}`) }
 
   const inScope = (code) => isAdmin || !scopedCode || code === scopedCode
   const yelpRows = useMemo(() => (yelp || []).filter((r) => r.rating != null && inScope(r.code)), [yelp, isAdmin, scopedCode])
@@ -44,13 +52,19 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 md:p-8 max-w-7xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-zinc-50">Dashboard</h1>
-        <p className="text-zinc-500 mt-1">Live overview across your restaurants.</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-50">Dashboard</h1>
+          <p className="text-zinc-500 mt-1">Live overview across your restaurants.</p>
+        </div>
+        <div className="pt-1"><LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} /></div>
       </div>
 
-      {loading ? (
-        <p className="text-zinc-500 text-sm py-10 text-center">Loading live data…</p>
+      {loading && !hasData ? (
+        <>
+          <KpiSkeleton count={4} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6"><ChartSkeleton /><ChartSkeleton /></div>
+        </>
       ) : !hasData ? (
         <Unavailable />
       ) : (
@@ -63,7 +77,7 @@ export default function Dashboard() {
           </div>
 
           {lowest && (
-            <Link to="/reviews" className="flex items-center gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 mb-6 hover:bg-amber-500/15 transition-colors">
+            <Link to={`/locations/${lowest.name}`} className="flex items-center gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 mb-6 hover:bg-amber-500/15 transition-colors">
               <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
               <p className="text-sm text-amber-100 flex-1">
                 <span className="font-medium">{locByCode(lowest.name)?.name}</span> has the lowest Yelp rating ({lowest.rating}★). Worth a look.
@@ -81,7 +95,7 @@ export default function Dashboard() {
                     <XAxis dataKey="name" stroke="#71717a" tick={{ fontSize: 11 }} />
                     <YAxis stroke="#71717a" tick={{ fontSize: 10 }} domain={[0, 5]} width={30} />
                     <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} formatter={(v) => v.toFixed(1) + '★'} />
-                    <Bar dataKey="rating" radius={[8, 8, 0, 0]}>
+                    <Bar dataKey="rating" radius={[8, 8, 0, 0]} cursor="pointer" onClick={goToLocation}>
                       {yelpChart.map((e, i) => <Cell key={i} fill={e.color} />)}
                     </Bar>
                   </BarChart>
@@ -97,7 +111,7 @@ export default function Dashboard() {
                     <XAxis dataKey="name" stroke="#71717a" tick={{ fontSize: 11 }} />
                     <YAxis stroke="#71717a" tick={{ fontSize: 10 }} width={40} tickFormatter={(v) => fmtNum(v)} />
                     <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} formatter={(v) => fmtNum(v) + ' followers'} />
-                    <Bar dataKey="followers" radius={[8, 8, 0, 0]}>
+                    <Bar dataKey="followers" radius={[8, 8, 0, 0]} cursor="pointer" onClick={goToLocation}>
                       {followerChart.map((e, i) => <Cell key={i} fill={e.color} />)}
                     </Bar>
                   </BarChart>
@@ -105,6 +119,12 @@ export default function Dashboard() {
               ) : <Empty />}
             </ChartCard>
           </div>
+
+          <Link to="/trends" className="flex items-center gap-3 rounded-2xl bg-[#101012] border border-zinc-800 p-4 mb-6 hover:border-zinc-600 transition-colors">
+            <TrendingUp className="w-5 h-5 text-accent-400 shrink-0" />
+            <p className="text-sm text-zinc-300 flex-1">See how your ratings and followers change over time.</p>
+            <ArrowRight className="w-4 h-4 text-zinc-500 shrink-0" />
+          </Link>
 
           <section className="bg-[#101012] rounded-2xl border border-zinc-800 overflow-hidden">
             <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
