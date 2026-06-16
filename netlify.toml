@@ -6,6 +6,10 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+# Record one Trends snapshot per day (ratings + follower history).
+[functions."snapshot"]
+  schedule = "@daily"
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Star, MessageSquare, Send, Link2,
-  BarChart3, Settings, Menu, X, LogOut, Megaphone, Activity as ActivityIcon, Sparkles, Globe,
+  BarChart3, Settings, Menu, X, LogOut, Megaphone, Activity as ActivityIcon, Sparkles, Globe, TrendingUp,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -19,6 +19,7 @@ const navItems = [
 const adminItems = [
   { to: '/connections', icon: Link2,        label: 'Connections' },
   { to: '/reports',       icon: BarChart3,    label: 'Reports' },
+  { to: '/trends',        icon: TrendingUp,   label: 'Trends' },
   { to: '/traffic',       icon: Globe,        label: 'Traffic' },
   { to: '/ai-visibility', icon: Sparkles,     label: 'AI Visibility' },
   { to: '/activity',      icon: ActivityIcon, label: 'Activity' },

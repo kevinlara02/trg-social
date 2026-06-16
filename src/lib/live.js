@@ -37,6 +37,22 @@ export function getYelp() {
   return getJson('/.netlify/functions/yelp-ratings', 10000)
 }
 
+// Daily history of ratings + follower counts (Trends page). Returns an array
+// of { date, restaurants:[{ code, rating, reviews, ig, fb }] } or null.
+export async function getTrends(timeoutMs = 10000) {
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+    const res = await fetch('/.netlify/functions/trends', { signal: ctrl.signal })
+    clearTimeout(timer)
+    if (!res.ok) return null
+    const data = await res.json()
+    return Array.isArray(data?.history) ? data.history : null
+  } catch {
+    return null
+  }
+}
+
 // Post a reply to a comment. Returns { ok, id } or { ok:false, error }.
 export async function replyToComment({ code, network, comment_id, message }) {
   try {
