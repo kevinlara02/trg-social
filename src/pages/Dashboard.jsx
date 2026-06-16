@@ -1,375 +1,191 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Star, MessageSquare, CalendarClock, TrendingUp, Link2, ArrowRight } from 'lucide-react'
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { supabase, LOCATIONS, locationName } from '../lib/supabase'
+import { Star, Users, Heart, Image as ImageIcon, AlertTriangle, ArrowRight } from 'lucide-react'
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { ReviewStatusBadge, StarRating } from '../components/ui/Badge'
 import { PlatformIcon } from '../components/ui/Platform'
-import { LocationDot, LocationBadge } from '../components/ui/Location'
-import { fmt } from '../lib/datefmt'
-import { eachDayOfInterval, startOfMonth, endOfMonth, format, parseISO } from 'date-fns'
+import { getYelp, getLivePosts } from '../lib/live'
 
-const ABBREV = {
-  'The Benediction': 'TB',
-  'Toast Whittier': 'TW',
-  'Story Whittier': 'SW',
-  'Story Anaheim': 'SA',
-  'Story Brea': 'SB',
-  'Benny and Marys': 'BM',
-  'Toast Downey': 'TD',
-}
-
-const abbrevName = (fullName) => ABBREV[fullName] || fullName
+const fmtNum = (n) => (n == null ? '–' : n >= 1000 ? (n / 1000).toFixed(1).replace('.0', '') + 'k' : `${n}`)
+const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
 
 export default function Dashboard() {
   const { isAdmin, scopedLocationId } = useAuth()
-  const [loc, setLoc] = useState(scopedLocationId || null)
+  const scopedCode = scopedLocationId ? locationById(scopedLocationId)?.code : null
   const [loading, setLoading] = useState(true)
-  const [reviews, setReviews] = useState([])
-  const [messages, setMessages] = useState([])
-  const [posts, setPosts] = useState([])
-  const [accounts, setAccounts] = useState([])
-
-  const effectiveLoc = isAdmin ? loc : scopedLocationId
+  const [yelp, setYelp] = useState(null)
+  const [posts, setPosts] = useState(null)
 
   useEffect(() => {
     let active = true
-    async function load() {
-      setLoading(true)
-      try {
-        const [r, m, p, a] = await Promise.all([
-          supabase.from('reviews')
-            .select('id, location_id, platform, author_name, rating, body, review_date, status')
-            .order('review_date', { ascending: false }).limit(100),
-          supabase.from('messages')
-            .select('id, location_id, platform, kind, status').eq('status', 'new'),
-          supabase.from('posts')
-            .select('id, caption, status, scheduled_at').eq('status', 'scheduled')
-            .order('scheduled_at', { ascending: true }).limit(8),
-          supabase.from('connected_accounts')
-            .select('location_id, platform, status'),
-        ])
-        if (!active) return
-        setReviews(r.data || [])
-        setMessages(m.data || [])
-        setPosts(p.data || [])
-        setAccounts(a.data || [])
-      } catch {
-        if (active) { setReviews([]); setMessages([]); setPosts([]); setAccounts([]) }
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-    load()
+    Promise.all([getYelp(), getLivePosts()]).then(([y, p]) => {
+      if (active) { setYelp(y); setPosts(p); setLoading(false) }
+    })
     return () => { active = false }
   }, [])
 
-  const byLoc = (arr) => (effectiveLoc ? arr.filter((x) => x.location_id === effectiveLoc) : arr)
-  const reviewsF = byLoc(reviews)
-  const messagesF = byLoc(messages)
+  const inScope = (code) => isAdmin || !scopedCode || code === scopedCode
+  const yelpRows = useMemo(() => (yelp || []).filter((r) => r.rating != null && inScope(r.code)), [yelp, isAdmin, scopedCode])
+  const postRows = useMemo(() => (posts || []).filter((r) => inScope(r.code)), [posts, isAdmin, scopedCode])
 
-  const newReviews = reviewsF.filter((r) => r.status === 'new').length
-  const rated = reviewsF.filter((r) => r.rating)
-  const avgRating = rated.length ? (rated.reduce((s, r) => s + Number(r.rating), 0) / rated.length).toFixed(1) : 'n/a'
-  const recent = reviewsF.slice(0, 6)
+  const hasData = yelpRows.length > 0 || postRows.length > 0
 
-  const connectedTotal = accounts.filter((x) => x.status === 'connected').length
-  const showSetup = !loading && connectedTotal === 0
-  const showTable = isAdmin && !effectiveLoc
+  const avgYelp = yelpRows.length ? yelpRows.reduce((s, r) => s + (r.rating || 0), 0) / yelpRows.length : 0
+  const totalReviews = yelpRows.reduce((s, r) => s + (r.review_count || 0), 0)
+  const totalFollowers = postRows.reduce((s, r) => s + (r.ig_followers || 0) + (r.fb_followers || 0), 0)
+  const allPosts = postRows.flatMap((r) => (r.posts || []).map((p) => ({ ...p, code: r.code })))
+  const recentEng = allPosts.reduce((s, p) => s + (p.likes || 0) + (p.comments || 0), 0)
+  const recent = [...allPosts].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 4)
 
-  const ratingsTimelineData = buildTimelineData(reviewsF)
-  const platformData = buildPlatformData(reviewsF)
-  const ratingDistribution = buildRatingDistribution(reviewsF)
-  const restaurantRatings = buildRestaurantRatings(reviewsF)
+  const yelpChart = yelpRows.map((r) => ({ name: r.code, rating: r.rating, color: locByCode(r.code)?.color })).sort((a, b) => b.rating - a.rating)
+  const followerChart = postRows.map((r) => ({ name: r.code, followers: (r.ig_followers || 0) + (r.fb_followers || 0), color: locByCode(r.code)?.color })).filter((d) => d.followers > 0).sort((a, b) => b.followers - a.followers)
+  const lowest = yelpChart.length > 1 ? yelpChart[yelpChart.length - 1] : null
 
   return (
     <div className="p-4 md:p-8 max-w-7xl">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-zinc-50">Dashboard</h1>
-          {effectiveLoc && <LocationBadge id={effectiveLoc} />}
-        </div>
-        {isAdmin && (
-          <select
-            value={loc || ''}
-            onChange={(e) => setLoc(e.target.value ? Number(e.target.value) : null)}
-            className="px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-700 text-sm text-zinc-200"
-          >
-            <option value="">All Locations</option>
-            {LOCATIONS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-        )}
-      </div>
-
-      {showSetup && (
-        <Link to="/connections" className="block mb-6 rounded-2xl bg-gradient-to-r from-accent-500/15 to-accent-500/5 border border-accent-500/25 p-5 sm:p-6 hover:from-accent-500/20 transition-colors">
-          <div className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-xl bg-accent-500/20 text-accent-400 flex items-center justify-center shrink-0">
-              <Link2 className="w-6 h-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-semibold text-zinc-50">Let's connect your accounts</p>
-              <p className="text-sm text-zinc-400">Link each restaurant's Google, Yelp, Facebook, and Instagram to start seeing reviews and messages here.</p>
-            </div>
-            <ArrowRight className="w-5 h-5 shrink-0 text-accent-400" />
-          </div>
-        </Link>
-      )}
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard icon={Star} label="New Reviews" value={newReviews} loading={loading} />
-        <StatCard icon={MessageSquare} label="Unread Messages" value={messagesF.length} loading={loading} />
-        <StatCard icon={TrendingUp} label="Avg Rating" value={avgRating} loading={loading} />
-        <StatCard icon={CalendarClock} label="Scheduled Posts" value={posts.length} loading={loading} />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-zinc-50">Dashboard</h1>
+        <p className="text-zinc-500 mt-1">Live overview across your restaurants.</p>
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-zinc-400">Loading charts...</div>
+        <p className="text-zinc-500 text-sm py-10 text-center">Loading live data…</p>
+      ) : !hasData ? (
+        <Unavailable />
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4 md:p-6">
-              <h3 className="font-semibold text-zinc-100 mb-4 text-sm md:text-base">Ratings Over Time</h3>
-              <ResponsiveContainer width="100%" height={200} minHeight={200}>
-                <LineChart data={ratingsTimelineData} margin={{ left: -20, right: 0, top: 5, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                  <XAxis dataKey="date" stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} />
-                  <YAxis stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} domain={[0, 5]} width={30} />
-                  <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} />
-                  <Line type="monotone" dataKey="rating" stroke="#71717a" strokeWidth={2} dot={{ fill: '#71717a', r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4 md:p-6">
-              <h3 className="font-semibold text-zinc-100 mb-4 text-sm md:text-base">Rating Distribution</h3>
-              <ResponsiveContainer width="100%" height={200} minHeight={200}>
-                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                  <Pie data={ratingDistribution} cx="50%" cy="50%" labelLine={false} label={(entry) => `${entry.value}`} outerRadius={70} fill="#71717a" dataKey="value">
-                    {ratingDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'][index] || '#71717a'} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4 md:p-6">
-              <h3 className="font-semibold text-zinc-100 mb-4 text-sm md:text-base">Avg Rating by Restaurant</h3>
-              <ResponsiveContainer width="100%" height={200} minHeight={200}>
-                <BarChart data={restaurantRatings} margin={{ left: -20, right: 0, top: 5, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                  <XAxis dataKey="abbrev" stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} />
-                  <YAxis stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} domain={[0, 5]} width={30} />
-                  <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} formatter={(value) => value.toFixed(1)} />
-                  <Bar dataKey="rating" radius={[8, 8, 0, 0]}>
-                    {restaurantRatings.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <Kpi icon={Star} label="Avg Yelp Rating" value={avgYelp ? avgYelp.toFixed(1) + '★' : '–'} />
+            <Kpi icon={Users} label="Followers (IG+FB)" value={fmtNum(totalFollowers)} />
+            <Kpi icon={Star} label="Yelp Reviews" value={fmtNum(totalReviews)} />
+            <Kpi icon={Heart} label="Recent Engagement" value={fmtNum(recentEng)} />
           </div>
 
-          <div className="grid grid-cols-1 gap-6 mb-6">
-            <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4 md:p-6">
-              <h3 className="font-semibold text-zinc-100 mb-4 text-sm md:text-base">Reviews by Platform</h3>
-              <ResponsiveContainer width="100%" height={200} minHeight={200}>
-                <BarChart data={platformData} margin={{ left: -20, right: 0, top: 5, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                  <XAxis dataKey="platform" stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} />
-                  <YAxis stroke="#71717a" style={{ fontSize: '11px' }} tick={{ fontSize: 10 }} width={30} />
-                  <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} />
-                  <Bar dataKey="count" fill="#71717a" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {showTable && (
-            <div className="bg-[#101012] rounded-2xl border border-zinc-800 overflow-hidden mb-6">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800">
-                      <th className="py-3 px-5">Restaurant</th>
-                      <th className="py-3 px-3 text-right">New Reviews</th>
-                      <th className="py-3 px-3 text-right">Unread</th>
-                      <th className="py-3 px-5 text-right">Avg Rating</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {LOCATIONS.map((l) => {
-                      const rv = reviews.filter((r) => r.location_id === l.id)
-                      const nr = rv.filter((r) => r.status === 'new').length
-                      const un = messages.filter((m) => m.location_id === l.id).length
-                      const rd = rv.filter((r) => r.rating)
-                      const avg = rd.length ? (rd.reduce((s, r) => s + Number(r.rating), 0) / rd.length).toFixed(1) : null
-                      return (
-                        <tr
-                          key={l.id}
-                          onClick={() => setLoc(l.id)}
-                          className="border-b border-zinc-800/60 last:border-0 hover:bg-zinc-900 cursor-pointer"
-                        >
-                          <td className="py-3 px-5" style={{ borderLeft: `4px solid ${l.color}` }}>
-                            <span className="inline-flex items-center gap-2 font-medium text-zinc-200">
-                              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: l.color }} />
-                              {l.name}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-right font-medium">{nr > 0 ? <span className="text-zinc-100">{nr}</span> : <span className="text-zinc-600">0</span>}</td>
-                          <td className="py-3 px-3 text-right font-medium">{un > 0 ? <span className="text-zinc-100">{un}</span> : <span className="text-zinc-600">0</span>}</td>
-                          <td className="py-3 px-5 text-right font-semibold text-accent-400">{avg || <span className="text-zinc-600 font-medium">n/a</span>}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {lowest && (
+            <Link to="/reviews" className="flex items-center gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 mb-6 hover:bg-amber-500/15 transition-colors">
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+              <p className="text-sm text-amber-100 flex-1">
+                <span className="font-medium">{locByCode(lowest.name)?.name}</span> has the lowest Yelp rating ({lowest.rating}★). Worth a look.
+              </p>
+              <ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
+            </Link>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <section className="bg-[#101012] rounded-2xl border border-zinc-800 overflow-hidden">
-              <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
-                <h2 className="font-semibold text-zinc-100">Recent Reviews</h2>
-                <Link to="/reviews" className="text-sm text-zinc-400 hover:text-zinc-200">View all</Link>
-              </div>
-              {recent.length === 0 ? (
-                <div className="px-5 py-10 text-center">
-                  <Star className="w-6 h-6 text-zinc-600 mx-auto mb-2" />
-                  <p className="text-zinc-500 text-sm">No reviews yet</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-zinc-800/60">
-                  {recent.map((rev) => (
-                    <li key={rev.id} className="px-5 py-3 flex items-start gap-3">
-                      <PlatformIcon platform={rev.platform} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-zinc-100 text-sm truncate">{rev.author_name || 'Guest'}</p>
-                          {rev.rating ? <StarRating rating={rev.rating} /> : null}
-                        </div>
-                        <p className="text-xs text-zinc-500 truncate flex items-center gap-1.5">
-                          <LocationDot id={rev.location_id} />{locationName(rev.location_id)}
-                        </p>
-                        {rev.body && <p className="text-sm text-zinc-400 mt-1 line-clamp-2">{rev.body}</p>}
-                      </div>
-                      <ReviewStatusBadge status={rev.status} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <ChartCard title="Yelp rating by restaurant" subtitle="Live from Yelp" to="/reviews">
+              {yelpChart.length ? (
+                <ResponsiveContainer width="100%" height={220} minHeight={220}>
+                  <BarChart data={yelpChart} margin={{ left: -20, right: 0, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                    <XAxis dataKey="name" stroke="#71717a" tick={{ fontSize: 11 }} />
+                    <YAxis stroke="#71717a" tick={{ fontSize: 10 }} domain={[0, 5]} width={30} />
+                    <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} formatter={(v) => v.toFixed(1) + '★'} />
+                    <Bar dataKey="rating" radius={[8, 8, 0, 0]}>
+                      {yelpChart.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <Empty />}
+            </ChartCard>
 
-            <section className="bg-[#101012] rounded-2xl border border-zinc-800 overflow-hidden">
-              <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
-                <h2 className="font-semibold text-zinc-100">Scheduled Posts</h2>
-                <Link to="/publish" className="text-sm text-zinc-400 hover:text-zinc-200">Open Publish</Link>
-              </div>
-              {posts.length === 0 ? (
-                <div className="px-5 py-10 text-center">
-                  <CalendarClock className="w-6 h-6 text-zinc-600 mx-auto mb-2" />
-                  <p className="text-zinc-500 text-sm">Nothing scheduled</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-zinc-800/60">
-                  {posts.map((post) => (
-                    <li key={post.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                      <p className="text-sm text-zinc-200 truncate flex-1">{post.caption || 'Untitled post'}</p>
-                      <span className="text-xs text-zinc-500 shrink-0">{fmt(post.scheduled_at)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+            <ChartCard title="Followers by restaurant" subtitle="Instagram + Facebook" to="/traffic">
+              {followerChart.length ? (
+                <ResponsiveContainer width="100%" height={220} minHeight={220}>
+                  <BarChart data={followerChart} margin={{ left: -10, right: 0, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                    <XAxis dataKey="name" stroke="#71717a" tick={{ fontSize: 11 }} />
+                    <YAxis stroke="#71717a" tick={{ fontSize: 10 }} width={40} tickFormatter={(v) => fmtNum(v)} />
+                    <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} formatter={(v) => fmtNum(v) + ' followers'} />
+                    <Bar dataKey="followers" radius={[8, 8, 0, 0]}>
+                      {followerChart.map((e, i) => <Cell key={i} fill={e.color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <Empty />}
+            </ChartCard>
           </div>
+
+          <section className="bg-[#101012] rounded-2xl border border-zinc-800 overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+              <h2 className="font-semibold text-zinc-100">Recent posts</h2>
+              <Link to="/social" className="text-sm text-zinc-400 hover:text-zinc-200">View all</Link>
+            </div>
+            <div className="p-4">
+              {recent.length ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {recent.map((p) => <PostThumb key={p.id} post={p} />)}
+                </div>
+              ) : <Empty />}
+            </div>
+          </section>
         </>
       )}
     </div>
   )
 }
 
-function StatCard({ icon: Icon, label, value, loading }) {
+function PostThumb({ post }) {
+  const l = locByCode(post.code)
+  return (
+    <a href={post.permalink || '#'} target="_blank" rel="noreferrer" className="block rounded-xl overflow-hidden border border-zinc-800 bg-[#0c0c0e] hover:border-zinc-600 transition-colors">
+      {post.image ? (
+        <img src={post.image} alt="" loading="lazy" className="w-full aspect-square object-cover" />
+      ) : (
+        <div className="w-full aspect-square flex items-center justify-center bg-zinc-900 text-zinc-700"><ImageIcon className="w-6 h-6" /></div>
+      )}
+      <div className="p-2.5">
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: l?.color }} />
+          <span className="text-xs text-zinc-300 truncate flex-1">{l?.name}</span>
+          <PlatformIcon platform={post.network} size="sm" />
+        </div>
+        <div className="flex items-center gap-3 text-xs text-zinc-500">
+          {post.likes != null && <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{fmtNum(post.likes)}</span>}
+          <span className="ml-auto">{post.date ? post.date.slice(0, 10) : ''}</span>
+        </div>
+      </div>
+    </a>
+  )
+}
+
+function Kpi({ icon: Icon, label, value }) {
   return (
     <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-5 flex items-center gap-4">
-      <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-accent-500/10 text-accent-400">
-        <Icon className="w-6 h-6" />
-      </div>
+      <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-accent-500/10 text-accent-400"><Icon className="w-6 h-6" /></div>
       <div className="min-w-0">
-        <p className="text-2xl font-bold text-zinc-50">{loading ? '…' : value}</p>
+        <p className="text-2xl font-bold text-zinc-50 flex items-center gap-2">{value}<span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400 bg-emerald-500/10 rounded px-1.5 py-0.5">Live</span></p>
         <p className="text-sm text-zinc-500 truncate">{label}</p>
       </div>
     </div>
   )
 }
 
-function buildTimelineData(reviews) {
-  if (!reviews.length) return []
-  const now = new Date()
-  const month = startOfMonth(now)
-  const end = endOfMonth(now)
-  const days = eachDayOfInterval({ start: month, end })
-
-  const grouped = {}
-  days.forEach((d) => {
-    grouped[format(d, 'yyyy-MM-dd')] = []
-  })
-
-  reviews.forEach((r) => {
-    if (r.review_date) {
-      const key = format(parseISO(r.review_date), 'yyyy-MM-dd')
-      if (grouped[key]) grouped[key].push(r)
-    }
-  })
-
-  return days.map((d) => {
-    const key = format(d, 'yyyy-MM-dd')
-    const dayReviews = grouped[key].filter((r) => r.rating)
-    const avg = dayReviews.length ? dayReviews.reduce((s, r) => s + Number(r.rating), 0) / dayReviews.length : null
-    return {
-      date: format(d, 'MMM dd'),
-      rating: avg ? parseFloat(avg.toFixed(1)) : null,
-    }
-  }).filter((d) => d.rating !== null)
+function ChartCard({ title, subtitle, to, children }) {
+  return (
+    <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4 md:p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="font-semibold text-zinc-100 text-sm md:text-base">{title}</h3>
+          {subtitle && <p className="text-xs text-zinc-500 mt-0.5">{subtitle}</p>}
+        </div>
+        {to && <Link to={to} className="text-xs text-zinc-500 hover:text-zinc-300">Details</Link>}
+      </div>
+      {children}
+    </div>
+  )
 }
 
-function buildPlatformData(reviews) {
-  const platforms = {}
-  reviews.forEach((r) => {
-    platforms[r.platform] = (platforms[r.platform] || 0) + 1
-  })
-  return Object.entries(platforms).map(([platform, count]) => ({
-    platform: platform.charAt(0).toUpperCase() + platform.slice(1),
-    count,
-  }))
+function Empty() {
+  return <p className="text-sm text-zinc-600 text-center py-10">No data yet</p>
 }
 
-function buildRatingDistribution(reviews) {
-  const counts = { '1 Star': 0, '2 Stars': 0, '3 Stars': 0, '4 Stars': 0, '5 Stars': 0 }
-  reviews.forEach((r) => {
-    if (r.rating) {
-      const rating = Math.round(Number(r.rating))
-      if (rating === 1) counts['1 Star']++
-      else if (rating === 2) counts['2 Stars']++
-      else if (rating === 3) counts['3 Stars']++
-      else if (rating === 4) counts['4 Stars']++
-      else if (rating === 5) counts['5 Stars']++
-    }
-  })
-  return Object.entries(counts).map(([name, value]) => ({ name, value })).filter((d) => d.value > 0)
-}
-
-function buildRestaurantRatings(reviews) {
-  const byLoc = {}
-  LOCATIONS.forEach((l) => { byLoc[l.id] = [] })
-  reviews.forEach((r) => { if (r.rating && byLoc[r.location_id]) byLoc[r.location_id].push(Number(r.rating)) })
-  return LOCATIONS
-    .map((l) => {
-      const ratings = byLoc[l.id]
-      const avg = ratings.length ? ratings.reduce((s, r) => s + r, 0) / ratings.length : 0
-      return { abbrev: abbrevName(l.name), rating: avg > 0 ? parseFloat(avg.toFixed(1)) : 0, color: l.color }
-    })
-    .filter((d) => d.rating > 0)
+function Unavailable() {
+  return (
+    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-8 text-center">
+      <Star className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
+      <p className="font-medium text-zinc-200">Live data isn't available right now</p>
+      <p className="text-sm text-zinc-500 mt-1">The dashboard shows real Yelp + Instagram + Facebook data on the deployed site.</p>
+    </div>
+  )
 }
