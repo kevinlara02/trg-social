@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageSquare, Reply, Send, Loader2, Check, ExternalLink } from 'lucide-react'
+import { MessageSquare, Reply, Send, Loader2, Check, ExternalLink, Mail } from 'lucide-react'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PlatformIcon } from '../components/ui/Platform'
 import { LastUpdated } from '../components/ui/LastUpdated'
 import { ListSkeleton } from '../components/ui/Skeleton'
 import { TEMPLATES } from '../lib/templates'
-import { getComments, replyToComment } from '../lib/live'
+import { getComments, replyToComment, getSquarespaceMessages } from '../lib/live'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
 
@@ -18,26 +18,31 @@ export default function Inbox() {
   const [loc, setLoc] = useState(scopedCode || null)
   const [platform, setPlatform] = useState(null)
   const [replied, setReplied] = useState({}) // { comment_id: replyText }
+  const [sq, setSq] = useState(null) // squarespace website form messages
   const [updatedAt, setUpdatedAt] = useState(null)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
     setLoading(true)
-    getComments().then((rows) => { if (active) { setData(rows); setUpdatedAt(Date.now()); setLoading(false) } })
+    Promise.all([getComments(), getSquarespaceMessages()]).then(([rows, forms]) => {
+      if (active) { setData(rows); setSq(forms); setUpdatedAt(Date.now()); setLoading(false) }
+    })
     return () => { active = false }
   }, [tick])
 
   const comments = useMemo(() => {
-    if (!data) return []
-    let rows = data
-    if (!isAdmin && scopedCode) rows = rows.filter((r) => r.code === scopedCode)
-    if (loc) rows = rows.filter((r) => r.code === loc)
-    return rows
+    const inScope = (code) => (isAdmin || !scopedCode || code === scopedCode) && (!loc || code === loc)
+    const fromComments = (data || [])
+      .filter((r) => inScope(r.code))
       .flatMap((r) => (r.comments || []).map((c) => ({ ...c, code: r.code })))
+    const fromForms = (sq || [])
+      .filter((r) => inScope(r.code))
+      .flatMap((r) => (r.messages || []).map((m) => ({ ...m, network: 'squarespace' })))
+    return [...fromComments, ...fromForms]
       .filter((c) => !platform || c.network === platform)
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-  }, [data, loc, platform, isAdmin, scopedCode])
+  }, [data, sq, loc, platform, isAdmin, scopedCode])
 
   const unreplied = comments.filter((c) => !replied[c.id]).length
 
@@ -46,7 +51,7 @@ export default function Inbox() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-zinc-50">Inbox</h1>
-          {!loading && data && <span className="text-xs font-semibold text-accent-400 bg-accent-500/10 px-2 py-0.5 rounded-full">{unreplied} comments</span>}
+          {!loading && (data || sq) && <span className="text-xs font-semibold text-accent-400 bg-accent-500/10 px-2 py-0.5 rounded-full">{unreplied} new</span>}
         </div>
         <div className="flex items-center gap-3">
           <LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} />
@@ -63,24 +68,25 @@ export default function Inbox() {
         </div>
       </div>
 
-      {data && (
+      {(data || sq) && (
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 mb-5 flex gap-2.5 items-center">
           <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
-          <p className="text-xs text-emerald-200/80">Live comments from your Instagram &amp; Facebook posts. Replies post straight to the platform.</p>
+          <p className="text-xs text-emerald-200/80">Live Instagram &amp; Facebook comments plus website form messages, all in one place.</p>
         </div>
       )}
 
-      {data && (
+      {(data || sq) && (
         <div className="flex items-center gap-2 mb-6 flex-wrap">
           <FilterChip active={platform === null} onClick={() => setPlatform(null)}>All</FilterChip>
           <FilterChip active={platform === 'instagram'} onClick={() => setPlatform('instagram')}><PlatformIcon platform="instagram" size="sm" /> Instagram</FilterChip>
           <FilterChip active={platform === 'facebook'} onClick={() => setPlatform('facebook')}><PlatformIcon platform="facebook" size="sm" /> Facebook</FilterChip>
+          <FilterChip active={platform === 'squarespace'} onClick={() => setPlatform('squarespace')}><PlatformIcon platform="squarespace" size="sm" /> Website</FilterChip>
         </div>
       )}
 
-      {loading && !data ? (
+      {loading && !data && !sq ? (
         <ListSkeleton rows={5} />
-      ) : !data ? (
+      ) : !data && !sq ? (
         <Unavailable />
       ) : comments.length === 0 ? (
         <NoComments />
@@ -140,7 +146,20 @@ function CommentCard({ comment, repliedText, onReplied }) {
           <p className="text-sm text-zinc-300 mt-2">{comment.text || <span className="text-zinc-600 italic">(no text)</span>}</p>
           {comment.post_caption && <p className="text-xs text-zinc-600 mt-1 line-clamp-1">on: {comment.post_caption}</p>}
 
-          {repliedText ? (
+          {comment.network === 'squarespace' ? (
+            <div className="mt-3 flex items-center gap-3 flex-wrap text-xs">
+              {comment.email ? (
+                <>
+                  <a href={`mailto:${comment.email}?subject=${encodeURIComponent('Re: your message to ' + (loc?.name || 'us'))}`} className="inline-flex items-center gap-1.5 font-medium text-zinc-300 border border-zinc-700 hover:bg-zinc-800 px-3 py-1.5 rounded-lg">
+                    <Mail className="w-3.5 h-3.5" /> Reply by email
+                  </a>
+                  <span className="text-zinc-500">{comment.email}</span>
+                </>
+              ) : (
+                <span className="text-zinc-600">No email provided</span>
+              )}
+            </div>
+          ) : repliedText ? (
             <div className="mt-3 rounded-xl bg-zinc-900 border border-zinc-800 p-3">
               <p className="text-xs font-medium text-emerald-400 mb-1 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Replied</p>
               <p className="text-sm text-zinc-300">{repliedText}</p>

@@ -42,6 +42,11 @@ export function getGa4() {
   return getJson('/.netlify/functions/ga4-traffic', 12000)
 }
 
+// Squarespace website contact-form submissions per restaurant (Inbox).
+export function getSquarespaceMessages() {
+  return getJson('/.netlify/functions/squarespace-messages', 12000)
+}
+
 // Daily history of ratings + follower counts (Trends page). Returns an array
 // of { date, restaurants:[{ code, rating, reviews, ig, fb }] } or null.
 export async function getTrends(timeoutMs = 10000) {
