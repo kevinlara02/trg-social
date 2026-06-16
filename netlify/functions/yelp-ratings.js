@@ -58,14 +58,15 @@ export const handler = async () => {
   const key = process.env.YELP_API_KEY
   if (!key) return json(503, { ok: false, error: 'YELP_API_KEY not configured' })
 
-  if (CACHE.data && Date.now() - CACHE.at < TTL_MS) {
+  if (CACHE.data && Date.now() - CACHE.at < (CACHE.complete ? TTL_MS : 60 * 1000)) {
     return json(200, { ok: true, cached: true, ...CACHE.data })
   }
 
   const restaurants = await Promise.all(BIZ.map((b) => fetchBiz(b, key)))
   const data = { generated_at: new Date().toISOString(), restaurants }
-  // Only cache a fully-successful result, so a transient miss on one business
-  // doesn't stick for the whole TTL.
-  if (restaurants.every((r) => r.rating != null)) CACHE = { at: Date.now(), data }
+  // Cache complete results for the full TTL; cache partial results only briefly
+  // so a transient miss self-heals fast without re-hitting Yelp on every call.
+  const complete = restaurants.every((r) => r.rating != null)
+  CACHE = { at: Date.now(), data, complete }
   return json(200, { ok: true, cached: false, ...data })
 }
