@@ -1,9 +1,8 @@
-// Reads Squarespace contact-form submissions that are stored in Google Sheets
-// (Squarespace: form block -> Storage -> Google Drive). Uses the same service
-// account as GA4 (GOOGLE_SA_JSON), so it only needs Viewer access on each sheet.
-// Add each restaurant's sheet to SHEETS once the user connects the forms and
-// shares the sheet with the service-account email. spreadsheetId = the long id
-// in the sheet URL (.../spreadsheets/d/<THIS>/edit).
+// Reads Squarespace contact-form submissions stored in Google Sheets. v2
+// function (export default) so Netlify Blobs auto-configures and ../google-auth.js
+// can read the service-account JSON from a Blob. Add each restaurant's sheet to
+// SHEETS once the user connects the forms and shares the sheet with the
+// service-account email. spreadsheetId = the long id in the sheet URL.
 import { getAccessToken } from '../google-auth.js'
 
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
@@ -23,8 +22,6 @@ function pick(headers, row, patterns) {
   return null
 }
 
-// Squarespace sheets put the form fields as columns (Name, Email, Message, plus
-// a submitted-on timestamp). Map them flexibly and fall back to joining the rest.
 function normalize(code, rows) {
   if (!rows || rows.length < 2) return []
   const headers = rows[0] || []
@@ -47,7 +44,7 @@ function normalize(code, rows) {
     }
     out.push({ id: `${code}-${r}`, code, author, email: email || null, text: text || '(no message)', date: date || null })
   }
-  return out.reverse() // newest first (Squarespace appends new rows at the bottom)
+  return out.reverse()
 }
 
 async function fetchSheet(code, cfg, token) {
@@ -60,24 +57,21 @@ async function fetchSheet(code, cfg, token) {
   return { code, messages: normalize(code, d.values || []) }
 }
 
-function json(statusCode, body) {
-  return { statusCode, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }
 
-export const handler = async () => {
-  if (!process.env.GOOGLE_SA_JSON) return json(503, { ok: false, error: 'GOOGLE_SA_JSON not configured', restaurants: [] })
+export default async () => {
   const codes = Object.keys(SHEETS)
-  if (!codes.length) return json(200, { ok: true, restaurants: [] })
-
-  if (CACHE.data && Date.now() - CACHE.at < TTL_MS) return json(200, { ok: true, cached: true, ...CACHE.data })
-
+  if (!codes.length) return json({ ok: true, restaurants: [] })
+  if (CACHE.data && Date.now() - CACHE.at < TTL_MS) return json({ ok: true, cached: true, ...CACHE.data })
   try {
     const token = await getAccessToken(SCOPE)
     const restaurants = await Promise.all(codes.map((c) => fetchSheet(c, SHEETS[c], token)))
     const data = { generated_at: new Date().toISOString(), restaurants }
     CACHE = { at: Date.now(), data }
-    return json(200, { ok: true, cached: false, ...data })
+    return json({ ok: true, cached: false, ...data })
   } catch (err) {
-    return json(200, { ok: false, error: String(err?.message || err), restaurants: [] })
+    return json({ ok: false, error: String(err?.message || err), restaurants: [] })
   }
 }

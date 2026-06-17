@@ -1,17 +1,15 @@
 // Reads website traffic from Google Analytics 4 (GA4 Data API) for each
-// restaurant's Squarespace site. Needs a service account (GOOGLE_SA_JSON) with
-// Viewer access on each GA4 property (the property IDs are hardcoded below).
-// Note: GA4 uses the numeric PROPERTY ID, not the "G-XXXX" measurement ID.
-// (GOOGLE_SA_JSON wired 2026-06-16)
+// restaurant's Squarespace site. v2 function (export default) so Netlify Blobs
+// auto-configures: ../google-auth.js reads the service-account JSON from a Blob
+// (the key is too big to keep as a per-function env var under Netlify's 4 KB cap).
+// GA4 uses the numeric PROPERTY ID, not the "G-XXXX" measurement ID.
 import { getAccessToken } from '../google-auth.js'
 
 const SCOPE = 'https://www.googleapis.com/auth/analytics.readonly'
 let CACHE = { at: 0, data: null }
 const TTL_MS = 30 * 60 * 1000
 
-// Restaurant code -> GA4 numeric property ID (not the G-XXXX measurement ID).
-// Not secret, so hardcoded here (like the Yelp IDs). Add TW + SB once their
-// sites' GA4 property IDs are available.
+// Restaurant code -> GA4 numeric property ID (not secret). Add TW + SB later.
 const PROPERTIES = {
   SA: '541892780', // Story Anaheim
   SW: '541942787', // Story Whittier
@@ -47,25 +45,20 @@ async function reportFor(code, propertyId, token) {
   return { code, users, sessions, pageviews, sources }
 }
 
-function json(statusCode, body) {
-  return { statusCode, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }
 
-export const handler = async () => {
-  if (!process.env.GOOGLE_SA_JSON) return json(503, { ok: false, error: 'GOOGLE_SA_JSON not configured', restaurants: [] })
-  const map = PROPERTIES
-  const codes = Object.keys(map)
-  if (!codes.length) return json(200, { ok: true, restaurants: [] })
-
-  if (CACHE.data && Date.now() - CACHE.at < TTL_MS) return json(200, { ok: true, cached: true, ...CACHE.data })
-
+export default async () => {
+  const codes = Object.keys(PROPERTIES)
+  if (CACHE.data && Date.now() - CACHE.at < TTL_MS) return json({ ok: true, cached: true, ...CACHE.data })
   try {
     const token = await getAccessToken(SCOPE)
-    const restaurants = await Promise.all(codes.map((c) => reportFor(c, map[c], token)))
+    const restaurants = await Promise.all(codes.map((c) => reportFor(c, PROPERTIES[c], token)))
     const data = { generated_at: new Date().toISOString(), restaurants }
     CACHE = { at: Date.now(), data }
-    return json(200, { ok: true, cached: false, ...data })
+    return json({ ok: true, cached: false, ...data })
   } catch (err) {
-    return json(200, { ok: false, error: String(err?.message || err), restaurants: [] })
+    return json({ ok: false, error: String(err?.message || err), restaurants: [] })
   }
 }
