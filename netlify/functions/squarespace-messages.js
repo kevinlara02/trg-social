@@ -9,9 +9,10 @@ const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 let CACHE = { at: 0, data: null }
 const TTL_MS = 5 * 60 * 1000
 
-// code -> { spreadsheetId, range }. Empty until the user creates the sheets.
+// code -> { spreadsheetId, range }. Add each restaurant's form sheet here once
+// it's connected in Squarespace and shared with the service-account email.
 const SHEETS = {
-  // SA: { spreadsheetId: '1AbC...', range: 'Form Responses 1!A1:Z1000' },
+  BM: { spreadsheetId: '1aD4qu_y1WUKfaukedixYIat94WgGwVjJv2g3bVk3yJI', range: 'Sheet1!A1:Z1000' }, // Benny and Mary's
 }
 
 function pick(headers, row, patterns) {
