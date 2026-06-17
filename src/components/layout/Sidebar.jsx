@@ -8,22 +8,22 @@ import { useAuth } from '../../context/AuthContext'
 import { locationById } from '../../lib/supabase'
 import { AlertsBell } from '../ui/AlertsBell'
 
+// Only pages that work with real data are shown in the menu. Publish,
+// Connections, AI Visibility and Activity are hidden for now (demo-era pages
+// pending the real backend / Meta App Review); their routes still exist in
+// App.jsx so they can be re-enabled later.
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/reviews',   icon: Star,            label: 'Reviews' },
   { to: '/inbox',     icon: MessageSquare,   label: 'Inbox' },
-  { to: '/publish',   icon: Send,            label: 'Publish' },
   { to: '/social',    icon: Megaphone,       label: 'Social' },
 ]
 
 const adminItems = [
-  { to: '/connections', icon: Link2,        label: 'Connections' },
   { to: '/reports',       icon: BarChart3,    label: 'Reports' },
   { to: '/trends',        icon: TrendingUp,   label: 'Trends' },
   { to: '/traffic',       icon: Globe,        label: 'Traffic' },
-  { to: '/ai-visibility', icon: Sparkles,     label: 'AI Visibility' },
-  { to: '/activity',      icon: ActivityIcon, label: 'Activity' },
-  { to: '/admin',       icon: Settings,     label: 'Users' },
+  { to: '/admin',         icon: Settings,     label: 'Users' },
 ]
 
 function NavItem({ to, icon: Icon, label, onClick }) {
