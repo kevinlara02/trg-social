@@ -8,14 +8,14 @@ import { useAuth } from '../../context/AuthContext'
 import { locationById } from '../../lib/supabase'
 import { AlertsBell } from '../ui/AlertsBell'
 
-// Only pages that work with real data are shown in the menu. Publish,
-// Connections, AI Visibility and Activity are hidden for now (demo-era pages
-// pending the real backend / Meta App Review); their routes still exist in
-// App.jsx so they can be re-enabled later.
+// Only pages that work with real data are shown in the menu. Connections,
+// AI Visibility and Activity stay hidden (demo-era pages pending the real
+// backend); their routes still exist in App.jsx so they can be re-enabled.
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/reviews',   icon: Star,            label: 'Reviews' },
   { to: '/inbox',     icon: MessageSquare,   label: 'Inbox' },
+  { to: '/publish',   icon: Send,            label: 'Publish' },
   { to: '/social',    icon: Megaphone,       label: 'Social' },
 ]
 
