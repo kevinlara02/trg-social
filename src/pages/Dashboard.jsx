@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Star, Users, Heart, Image as ImageIcon, AlertTriangle, ArrowRight, TrendingUp } from 'lucide-react'
+import { Star, Users, Heart, Image as ImageIcon, AlertTriangle, ArrowRight, TrendingUp, Globe, MessageSquare } from 'lucide-react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PlatformIcon } from '../components/ui/Platform'
 import { LastUpdated } from '../components/ui/LastUpdated'
 import { KpiSkeleton, ChartSkeleton } from '../components/ui/Skeleton'
-import { getYelp, getLivePosts } from '../lib/live'
+import { delta, DeltaTag } from '../components/ui/Delta'
+import { getYelp, getLivePosts, getGa4 } from '../lib/live'
 
 const fmtNum = (n) => (n == null ? '–' : n >= 1000 ? (n / 1000).toFixed(1).replace('.0', '') + 'k' : `${n}`)
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
@@ -19,14 +20,15 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [yelp, setYelp] = useState(null)
   const [posts, setPosts] = useState(null)
+  const [ga4, setGa4] = useState(null)
   const [updatedAt, setUpdatedAt] = useState(null)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
     setLoading(true)
-    Promise.all([getYelp(), getLivePosts()]).then(([y, p]) => {
-      if (active) { setYelp(y); setPosts(p); setUpdatedAt(Date.now()); setLoading(false) }
+    Promise.all([getYelp(), getLivePosts(), getGa4()]).then(([y, p, g]) => {
+      if (active) { setYelp(y); setPosts(p); setGa4(g); setUpdatedAt(Date.now()); setLoading(false) }
     })
     return () => { active = false }
   }, [tick])
@@ -36,18 +38,22 @@ export default function Dashboard() {
   const inScope = (code) => isAdmin || !scopedCode || code === scopedCode
   const yelpRows = useMemo(() => (yelp || []).filter((r) => r.rating != null && inScope(r.code)), [yelp, isAdmin, scopedCode])
   const postRows = useMemo(() => (posts || []).filter((r) => inScope(r.code)), [posts, isAdmin, scopedCode])
+  const ga4Rows = useMemo(() => (ga4 || []).filter((r) => !r.error && inScope(r.code)), [ga4, isAdmin, scopedCode])
 
-  const hasData = yelpRows.length > 0 || postRows.length > 0
+  const hasData = yelpRows.length > 0 || postRows.length > 0 || ga4Rows.length > 0
 
   const avgYelp = yelpRows.length ? yelpRows.reduce((s, r) => s + (r.rating || 0), 0) / yelpRows.length : 0
   const totalReviews = yelpRows.reduce((s, r) => s + (r.review_count || 0), 0)
   const totalFollowers = postRows.reduce((s, r) => s + (r.ig_followers || 0) + (r.fb_followers || 0), 0)
+  const totalVisitors = ga4Rows.reduce((s, r) => s + (r.users || 0), 0)
+  const prevVisitors = ga4Rows.reduce((s, r) => s + (r.prev?.users || 0), 0)
+  const activeNow = ga4Rows.reduce((s, r) => s + (r.activeNow || 0), 0)
   const allPosts = postRows.flatMap((r) => (r.posts || []).map((p) => ({ ...p, code: r.code })))
-  const recentEng = allPosts.reduce((s, p) => s + (p.likes || 0) + (p.comments || 0), 0)
   const recent = [...allPosts].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 4)
 
   const yelpChart = yelpRows.map((r) => ({ name: r.code, rating: r.rating, color: locByCode(r.code)?.color })).sort((a, b) => b.rating - a.rating)
   const followerChart = postRows.map((r) => ({ name: r.code, followers: (r.ig_followers || 0) + (r.fb_followers || 0), color: locByCode(r.code)?.color })).filter((d) => d.followers > 0).sort((a, b) => b.followers - a.followers)
+  const visitorChart = ga4Rows.map((r) => ({ name: r.code, visitors: r.users || 0, color: locByCode(r.code)?.color })).filter((d) => d.visitors > 0).sort((a, b) => b.visitors - a.visitors)
   const lowest = yelpChart.length > 1 ? yelpChart[yelpChart.length - 1] : null
 
   return (
@@ -70,10 +76,10 @@ export default function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <Kpi icon={Globe} label="Website Visitors" value={fmtNum(totalVisitors)} delta={delta(totalVisitors, prevVisitors)} sub={activeNow > 0 ? `${activeNow} active now` : null} live={activeNow > 0} accent />
             <Kpi icon={Star} label="Avg Yelp Rating" value={avgYelp ? avgYelp.toFixed(1) + '★' : '–'} />
             <Kpi icon={Users} label="Followers (IG+FB)" value={fmtNum(totalFollowers)} />
-            <Kpi icon={Star} label="Yelp Reviews" value={fmtNum(totalReviews)} />
-            <Kpi icon={Heart} label="Recent Engagement" value={fmtNum(recentEng)} />
+            <Kpi icon={MessageSquare} label="Yelp Reviews" value={fmtNum(totalReviews)} />
           </div>
 
           {lowest && (
@@ -84,6 +90,22 @@ export default function Dashboard() {
               </p>
               <ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
             </Link>
+          )}
+
+          {visitorChart.length > 0 && (
+            <ChartCard title="Website visitors by restaurant" subtitle="Last 28 days, from Google Analytics" to="/traffic" className="mb-6">
+              <ResponsiveContainer width="100%" height={240} minHeight={240}>
+                <BarChart data={visitorChart} margin={{ left: -10, right: 0, top: 5, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                  <XAxis dataKey="name" stroke="#71717a" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="#71717a" tick={{ fontSize: 10 }} width={40} tickFormatter={(v) => fmtNum(v)} />
+                  <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '8px', color: '#fafafa', fontSize: '12px' }} formatter={(v) => fmtNum(v) + ' visitors'} />
+                  <Bar dataKey="visitors" radius={[8, 8, 0, 0]} cursor="pointer" onClick={goToLocation}>
+                    {visitorChart.map((e, i) => <Cell key={i} fill={e.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -169,21 +191,26 @@ function PostThumb({ post }) {
   )
 }
 
-function Kpi({ icon: Icon, label, value }) {
+function Kpi({ icon: Icon, label, value, delta: d, sub, live, accent }) {
   return (
-    <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-5 flex items-center gap-4">
-      <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-accent-500/10 text-accent-400"><Icon className="w-6 h-6" /></div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold text-zinc-50 flex items-center gap-2">{value}<span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400 bg-emerald-500/10 rounded px-1.5 py-0.5">Live</span></p>
-        <p className="text-sm text-zinc-500 truncate">{label}</p>
+    <div className={`bg-[#101012] rounded-2xl border p-5 ${accent ? 'border-accent-500/30' : 'border-zinc-800'}`}>
+      <div className="flex items-center gap-2 text-zinc-500 mb-2">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${accent ? 'bg-accent-500/15 text-accent-400' : 'bg-zinc-800/70 text-zinc-400'}`}><Icon className="w-5 h-5" /></div>
+        <span className="text-xs uppercase tracking-wide truncate">{label}</span>
+        {live && <span className="ml-auto w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
+      </div>
+      <p className="text-2xl md:text-3xl font-bold text-zinc-50">{value}</p>
+      <div className="flex items-center gap-2 mt-1 min-h-[18px]">
+        {d && <DeltaTag d={d} />}
+        {sub && <span className="text-xs text-zinc-500 truncate">{sub}</span>}
       </div>
     </div>
   )
 }
 
-function ChartCard({ title, subtitle, to, children }) {
+function ChartCard({ title, subtitle, to, className = '', children }) {
   return (
-    <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4 md:p-6">
+    <div className={`bg-[#101012] rounded-2xl border border-zinc-800 p-4 md:p-6 ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="font-semibold text-zinc-100 text-sm md:text-base">{title}</h3>
