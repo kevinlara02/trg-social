@@ -32,6 +32,27 @@ export function getComments() {
   return getJson('/.netlify/functions/meta-comments', 12000)
 }
 
+// Direct-message conversations (Facebook Messenger) per restaurant (Inbox).
+// Each restaurant: { code, conversations:[{ id, network, customer, customerId,
+// updated, messages:[{fromUs, author, text, time}], lastText, lastFromUs }] }.
+export function getDms() {
+  return getJson('/.netlify/functions/meta-dms', 15000)
+}
+
+// Send a reply to a Facebook DM conversation. Returns { ok } or { ok:false, error }.
+export async function replyToDm({ code, customerId, text }) {
+  try {
+    const res = await fetch('/.netlify/functions/meta-dm-reply', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code, customerId, text }),
+    })
+    return await res.json()
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) }
+  }
+}
+
 // Yelp rating + review count + link per restaurant (Reviews page).
 export function getYelp() {
   return getJson('/.netlify/functions/yelp-ratings', 10000)

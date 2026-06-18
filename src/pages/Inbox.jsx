@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageSquare, Reply, Send, Loader2, Check, ExternalLink, Mail } from 'lucide-react'
+import { MessageSquare, Reply, Send, Loader2, Check, ExternalLink, Mail, MessagesSquare } from 'lucide-react'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PlatformIcon } from '../components/ui/Platform'
 import { LastUpdated } from '../components/ui/LastUpdated'
 import { ListSkeleton } from '../components/ui/Skeleton'
 import { TEMPLATES } from '../lib/templates'
-import { getComments, replyToComment, getSquarespaceMessages } from '../lib/live'
+import { getComments, replyToComment, getSquarespaceMessages, getDms, replyToDm } from '../lib/live'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
 
@@ -19,20 +19,23 @@ export default function Inbox() {
   const [platform, setPlatform] = useState(null)
   const [replied, setReplied] = useState({}) // { comment_id: replyText }
   const [sq, setSq] = useState(null) // squarespace website form messages
+  const [dms, setDms] = useState(null) // facebook direct-message conversations
+  const [view, setView] = useState('comments') // 'comments' | 'messages'
   const [updatedAt, setUpdatedAt] = useState(null)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
     setLoading(true)
-    Promise.all([getComments(), getSquarespaceMessages()]).then(([rows, forms]) => {
-      if (active) { setData(rows); setSq(forms); setUpdatedAt(Date.now()); setLoading(false) }
+    Promise.all([getComments(), getSquarespaceMessages(), getDms()]).then(([rows, forms, convos]) => {
+      if (active) { setData(rows); setSq(forms); setDms(convos); setUpdatedAt(Date.now()); setLoading(false) }
     })
     return () => { active = false }
   }, [tick])
 
+  const inScope = (code) => (isAdmin || !scopedCode || code === scopedCode) && (!loc || code === loc)
+
   const comments = useMemo(() => {
-    const inScope = (code) => (isAdmin || !scopedCode || code === scopedCode) && (!loc || code === loc)
     const fromComments = (data || [])
       .filter((r) => inScope(r.code))
       .flatMap((r) => (r.comments || []).map((c) => ({ ...c, code: r.code })))
@@ -44,18 +47,27 @@ export default function Inbox() {
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
   }, [data, sq, loc, platform, isAdmin, scopedCode])
 
+  const conversations = useMemo(() => {
+    return (dms || [])
+      .filter((r) => inScope(r.code))
+      .flatMap((r) => (r.conversations || []).map((c) => ({ ...c, code: r.code })))
+      .sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))
+  }, [dms, loc, isAdmin, scopedCode])
+
   const unreplied = comments.filter((c) => !replied[c.id]).length
+  const dmCount = conversations.length
+  const ready = data || sq || dms
 
   return (
     <div className="p-4 md:p-8 max-w-4xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-zinc-50">Inbox</h1>
-          {!loading && (data || sq) && <span className="text-xs font-semibold text-accent-400 bg-accent-500/10 px-2 py-0.5 rounded-full">{unreplied} new</span>}
+          {!loading && ready && view === 'comments' && <span className="text-xs font-semibold text-accent-400 bg-accent-500/10 px-2 py-0.5 rounded-full">{unreplied} new</span>}
         </div>
         <div className="flex items-center gap-3">
           <LastUpdated at={updatedAt} loading={loading} onRefresh={() => setTick((t) => t + 1)} />
-          {isAdmin && data && (
+          {isAdmin && ready && (
             <select
               value={loc || ''}
               onChange={(e) => setLoc(e.target.value || null)}
@@ -68,40 +80,197 @@ export default function Inbox() {
         </div>
       </div>
 
-      {(data || sq) && (
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 mb-5 flex gap-2.5 items-center">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
-          <p className="text-xs text-emerald-200/80">Live Instagram &amp; Facebook comments plus website form messages, all in one place.</p>
+      {/* View tabs: comments/website vs direct messages */}
+      {ready && (
+        <div className="flex items-center gap-1 mb-5 bg-[#101012] border border-zinc-800 rounded-xl p-1 w-fit">
+          <ViewTab active={view === 'comments'} onClick={() => setView('comments')} icon={MessageSquare}>Comments &amp; Website</ViewTab>
+          <ViewTab active={view === 'messages'} onClick={() => setView('messages')} icon={MessagesSquare}>
+            Direct Messages{dmCount > 0 && <span className="ml-1.5 text-xs opacity-70">{dmCount}</span>}
+          </ViewTab>
         </div>
       )}
 
-      {(data || sq) && (
-        <div className="flex items-center gap-2 mb-6 flex-wrap">
-          <FilterChip active={platform === null} onClick={() => setPlatform(null)}>All</FilterChip>
-          <FilterChip active={platform === 'instagram'} onClick={() => setPlatform('instagram')}><PlatformIcon platform="instagram" size="sm" /> Instagram</FilterChip>
-          <FilterChip active={platform === 'facebook'} onClick={() => setPlatform('facebook')}><PlatformIcon platform="facebook" size="sm" /> Facebook</FilterChip>
-          <FilterChip active={platform === 'squarespace'} onClick={() => setPlatform('squarespace')}><PlatformIcon platform="squarespace" size="sm" /> Website</FilterChip>
-        </div>
-      )}
+      {view === 'comments' ? (
+        <>
+          {ready && (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3 mb-5 flex gap-2.5 items-center">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+              <p className="text-xs text-emerald-200/80">Live Instagram &amp; Facebook comments plus website form messages, all in one place.</p>
+            </div>
+          )}
 
-      {loading && !data && !sq ? (
-        <ListSkeleton rows={5} />
-      ) : !data && !sq ? (
-        <Unavailable />
-      ) : comments.length === 0 ? (
-        <NoComments />
+          {ready && (
+            <div className="flex items-center gap-2 mb-6 flex-wrap">
+              <FilterChip active={platform === null} onClick={() => setPlatform(null)}>All</FilterChip>
+              <FilterChip active={platform === 'instagram'} onClick={() => setPlatform('instagram')}><PlatformIcon platform="instagram" size="sm" /> Instagram</FilterChip>
+              <FilterChip active={platform === 'facebook'} onClick={() => setPlatform('facebook')}><PlatformIcon platform="facebook" size="sm" /> Facebook</FilterChip>
+              <FilterChip active={platform === 'squarespace'} onClick={() => setPlatform('squarespace')}><PlatformIcon platform="squarespace" size="sm" /> Website</FilterChip>
+            </div>
+          )}
+
+          {loading && !ready ? (
+            <ListSkeleton rows={5} />
+          ) : !ready ? (
+            <Unavailable />
+          ) : comments.length === 0 ? (
+            <NoComments />
+          ) : (
+            <div className="space-y-3">
+              {comments.map((c) => (
+                <CommentCard
+                  key={c.id}
+                  comment={c}
+                  repliedText={replied[c.id]}
+                  onReplied={(text) => setReplied((prev) => ({ ...prev, [c.id]: text }))}
+                />
+              ))}
+            </div>
+          )}
+        </>
       ) : (
-        <div className="space-y-3">
-          {comments.map((c) => (
-            <CommentCard
-              key={c.id}
-              comment={c}
-              repliedText={replied[c.id]}
-              onReplied={(text) => setReplied((prev) => ({ ...prev, [c.id]: text }))}
-            />
-          ))}
+        <>
+          <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-3 mb-5 flex gap-2.5 items-center">
+            <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0 animate-pulse" />
+            <p className="text-xs text-blue-200/80">Live Facebook Messenger conversations. Reply here and it sends from your Page.</p>
+          </div>
+
+          {loading && !dms ? (
+            <ListSkeleton rows={5} />
+          ) : conversations.length === 0 ? (
+            <NoMessages />
+          ) : (
+            <div className="space-y-3">
+              {conversations.map((c) => (
+                <DmCard key={c.id} convo={c} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function ViewTab({ active, onClick, icon: Icon, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+        active ? 'bg-zinc-800 text-zinc-50' : 'text-zinc-400 hover:text-zinc-200'
+      }`}
+    >
+      <Icon className="w-4 h-4" /> {children}
+    </button>
+  )
+}
+
+function timeAgo(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d)) return ''
+  const mins = Math.round((Date.now() - d.getTime()) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.round(hrs / 24)
+  if (days < 7) return `${days}d ago`
+  return d.toISOString().slice(0, 10)
+}
+
+function DmCard({ convo }) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState(null)
+  const [sent, setSent] = useState([]) // replies sent this session
+  const loc = locByCode(convo.code)
+
+  const thread = [...(convo.messages || []), ...sent]
+
+  async function send() {
+    const message = text.trim()
+    if (!message) return
+    if (!convo.customerId) { setError('Cannot reply: this conversation has no reachable recipient.'); return }
+    setSending(true); setError(null)
+    const res = await replyToDm({ code: convo.code, customerId: convo.customerId, text: message })
+    setSending(false)
+    if (res?.ok) {
+      setSent((prev) => [...prev, { fromUs: true, author: 'You', text: message, time: new Date().toISOString() }])
+      setText(''); setOpen(false)
+    } else {
+      setError(res?.error || 'Could not send. Facebook only allows replies within 24h of the last customer message.')
+    }
+  }
+
+  return (
+    <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-4" style={{ borderLeftWidth: '4px', borderLeftColor: loc?.color }}>
+      <div className="flex items-center gap-3 mb-3">
+        <PlatformIcon platform={convo.network} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
+            <span className="font-semibold text-zinc-100 text-sm">{convo.customer}</span>
+            <span className="text-xs text-zinc-500 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ background: loc?.color }} /> {loc?.name}
+            </span>
+            <span className="ml-auto text-xs text-zinc-600">{timeAgo(convo.updated)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Conversation thread */}
+      <div className="space-y-2 mb-3">
+        {thread.map((m, i) => (
+          <div key={i} className={`flex ${m.fromUs ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
+              m.fromUs ? 'bg-accent-500/15 text-accent-50 rounded-br-sm' : 'bg-zinc-800 text-zinc-200 rounded-bl-sm'
+            }`}>
+              {m.text || <span className="text-zinc-500 italic">(no text)</span>}
+              <div className={`text-[10px] mt-0.5 ${m.fromUs ? 'text-accent-200/50' : 'text-zinc-500'}`}>{m.fromUs ? 'You' : convo.customer} · {timeAgo(m.time)}</div>
+            </div>
+          </div>
+        ))}
+        {thread.length === 0 && <p className="text-sm text-zinc-600 italic">No messages in this conversation.</p>}
+      </div>
+
+      {convo.network !== 'facebook' ? (
+        <p className="text-xs text-zinc-600">Replying to Instagram DMs isn't available yet.</p>
+      ) : !open ? (
+        <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-300 border border-zinc-700 hover:bg-zinc-800 px-3 py-1.5 rounded-lg">
+          <Reply className="w-3.5 h-3.5" /> Reply
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            autoFocus
+            placeholder={`Message ${convo.customer}…`}
+            className="w-full rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-600 text-sm p-3 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500/50"
+          />
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <TemplatePicker onPick={setText} />
+            <button onClick={send} disabled={sending || !text.trim()} className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-400 disabled:opacity-50 text-zinc-950 text-sm font-semibold px-3 py-1.5 rounded-lg">
+              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {sending ? 'Sending…' : 'Send'}
+            </button>
+            <button onClick={() => { setOpen(false); setText(''); setError(null) }} className="text-sm text-zinc-400 hover:text-zinc-200 px-2 py-1.5">Cancel</button>
+          </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function NoMessages() {
+  return (
+    <div className="bg-[#101012] rounded-2xl border border-zinc-800 p-10 text-center">
+      <div className="inline-flex items-center justify-center w-12 h-12 bg-zinc-800 rounded-xl mb-3">
+        <MessagesSquare className="w-6 h-6 text-zinc-400" />
+      </div>
+      <p className="text-zinc-100 font-medium">No direct messages right now</p>
+      <p className="text-zinc-500 text-sm mt-1">New Facebook Messenger conversations will show up here.</p>
     </div>
   )
 }
