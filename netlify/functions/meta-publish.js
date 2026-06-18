@@ -5,7 +5,7 @@
 // - Facebook: posts a photo (if image_url) or a text/link post. test:true creates
 //   it UNPUBLISHED (a safe draft that doesn't appear on the page).
 // - Instagram: requires image_url (IG can't post text-only); 2-step create+publish.
-const GRAPH = 'https://graph.facebook.com/v25.0'
+const GRAPH = 'https://graph.facebook.com/v25.0' // token now includes pages_manage_posts
 
 function restaurants() {
   try { return JSON.parse(process.env.META_CREDENTIALS_JSON).restaurants || [] } catch { return [] }
