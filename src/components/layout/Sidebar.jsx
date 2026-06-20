@@ -52,7 +52,7 @@ export function Sidebar() {
 
   const close = () => setMobileOpen(false)
 
-  const ROLE_LABELS = { admin: 'Administrator', manager: 'Manager', staff: 'Staff' }
+  const ROLE_LABELS = { admin: 'Websites & Social Administrator', manager: 'Manager', staff: 'Staff' }
   const roleLabel = ROLE_LABELS[role] || ''
   const restaurant = role !== 'admin' && profile?.location_id ? locationById(profile.location_id) : null
 
@@ -62,8 +62,8 @@ export function Sidebar() {
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-zinc-50 truncate">Digital Monitor</p>
-              <p className="text-xs text-zinc-500 truncate">{roleLabel || 'Administrator'}</p>
+              <p className="text-sm font-bold text-zinc-50 truncate">TRG</p>
+              <p className="text-xs text-zinc-500 uppercase tracking-wide leading-tight">{roleLabel || 'Administrator'}</p>
             </div>
           </div>
           <AlertsBell />
@@ -92,8 +92,8 @@ export function Sidebar() {
             <div className="px-1 mb-2 flex items-center gap-2">
               {restaurant && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: restaurant.color }} />}
               <div className="min-w-0">
-                <p className="text-sm font-medium text-zinc-100 truncate">{profile.full_name || profile.email}</p>
-                <p className="text-xs text-zinc-500 truncate">{roleLabel}{restaurant ? ` · ${restaurant.name}` : ''}</p>
+                <p className="text-sm font-medium text-zinc-100 truncate">{role === 'admin' ? 'Admin' : (profile.full_name || profile.email)}</p>
+                <p className="text-xs text-zinc-500 uppercase tracking-wide leading-tight">{roleLabel}{restaurant ? ` · ${restaurant.name}` : ''}</p>
               </div>
             </div>
             <button
@@ -118,7 +118,7 @@ export function Sidebar() {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 bg-[#0c0c0e] border-b border-zinc-800 flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-zinc-50 text-sm">Digital Monitor</span>
+          <span className="font-bold text-zinc-50 text-sm">TRG</span>
         </div>
         <div className="flex items-center gap-1">
           <AlertsBell />
