@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Megaphone } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
   const { signIn } = useAuth()
@@ -31,7 +32,7 @@ export default function Login() {
     >
       <div className="bg-[#101012] border border-zinc-800 rounded-2xl shadow-2xl w-full max-w-sm p-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-zinc-50">Digital Monitor</h1>
+          <h1 className="text-2xl font-bold text-zinc-50">TRG Digital Monitor</h1>
           <p className="text-zinc-500 mt-1">Sign in to your account</p>
         </div>
 
@@ -50,15 +51,25 @@ export default function Login() {
           </div>
           <div>
             <label className="block text-sm font-medium text-zinc-300 mb-1.5">Password</label>
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500/50 text-base"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 pr-12 rounded-xl bg-zinc-900 border border-zinc-700 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500/50 text-base"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="absolute inset-y-0 right-0 flex items-center pr-4 text-zinc-500 hover:text-zinc-300"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
 
           {error && (
