@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, Star, MessageSquare, Send, Link2,
-  BarChart3, Settings, Menu, X, LogOut, Megaphone, Activity as ActivityIcon, Sparkles, Globe, TrendingUp,
+  BarChart3, Menu, X, LogOut, Megaphone, Activity as ActivityIcon, Sparkles, Globe, TrendingUp,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
@@ -19,11 +19,12 @@ const navItems = [
   { to: '/social',    icon: Megaphone,       label: 'Social' },
 ]
 
+// Users is hidden for now (single administrator). Its /admin route still
+// exists in App.jsx so it can be re-enabled when more users are added.
 const adminItems = [
   { to: '/reports',       icon: BarChart3,    label: 'Reports' },
   { to: '/trends',        icon: TrendingUp,   label: 'Trends' },
   { to: '/traffic',       icon: Globe,        label: 'Traffic' },
-  { to: '/admin',         icon: Settings,     label: 'Users' },
 ]
 
 function NavItem({ to, icon: Icon, label, onClick }) {
@@ -32,7 +33,7 @@ function NavItem({ to, icon: Icon, label, onClick }) {
       to={to}
       onClick={onClick}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+        `flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
           isActive
             ? 'bg-zinc-800 text-zinc-50 [&>svg]:text-accent-400'
             : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'
@@ -69,13 +70,13 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => (
           <NavItem key={item.to} {...item} onClick={close} />
         ))}
         {isAdmin && (
           <>
-            <div className="pt-4 pb-1 px-4">
+            <div className="pt-3 pb-1 px-4">
               <p className="text-xs font-semibold text-zinc-600 uppercase tracking-wider">Admin</p>
             </div>
             {adminItems.map((item) => (
