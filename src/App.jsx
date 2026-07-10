@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { Layout } from './components/layout/Layout'
 import Login from './pages/Login'
+import Privacy from './pages/Privacy'
+import DataDeletion from './pages/DataDeletion'
 
 // Lazy-loaded so each page ships as its own chunk (faster initial load,
 // heavy libs like recharts only download on the pages that use them).
@@ -49,6 +51,9 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
+          {/* Public legal pages (no login) — required for Meta App Review */}
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/data-deletion" element={<DataDeletion />} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
