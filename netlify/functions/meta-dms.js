@@ -44,7 +44,11 @@ async function conversations(r, network) {
   }
 }
 
-export const handler = async () => {
+export const handler = async (event) => {
+  const _pt = process.env.SOCIAL_PROXY_TOKEN;
+  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+    return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
+  }
   if (!process.env.META_CREDENTIALS_JSON) return json(503, { ok: false, error: 'META_CREDENTIALS_JSON not configured', restaurants: [] })
   if (CACHE.data && Date.now() - CACHE.at < TTL_MS) return json(200, { ok: true, cached: true, ...CACHE.data })
 

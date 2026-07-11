@@ -60,7 +60,11 @@ function json(statusCode, body) {
   }
 }
 
-export const handler = async () => {
+export const handler = async (event) => {
+  const _pt = process.env.SOCIAL_PROXY_TOKEN;
+  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+    return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
+  }
   const key = process.env.YELP_API_KEY
   if (!key) return json(503, { ok: false, error: 'YELP_API_KEY not configured' })
 

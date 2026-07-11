@@ -55,7 +55,11 @@ function json(statusCode, body) {
   }
 }
 
-export const handler = async () => {
+export const handler = async (event) => {
+  const _pt = process.env.SOCIAL_PROXY_TOKEN;
+  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+    return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
+  }
   const raw = process.env.META_CREDENTIALS_JSON
   if (!raw) return json(503, { ok: false, error: 'META_CREDENTIALS_JSON not configured' })
 

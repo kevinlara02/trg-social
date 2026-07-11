@@ -21,6 +21,10 @@ Rules:
 - Output ONLY the reply text, nothing else.`
 
 export const handler = async (event) => {
+  const _pt = process.env.SOCIAL_PROXY_TOKEN;
+  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+    return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
+  }
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) }
   }

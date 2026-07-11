@@ -4,7 +4,11 @@
 // v2 function (export default): Netlify Blobs auto-configures in this format.
 import { ensureToday } from '../snapshot-core.js'
 
-export default async () => {
+export default async (req) => {
+  const _pt = process.env.SOCIAL_PROXY_TOKEN;
+  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
+  }
   try {
     const history = await ensureToday()
     return new Response(JSON.stringify({ ok: true, history }), {

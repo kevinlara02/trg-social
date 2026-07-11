@@ -62,7 +62,11 @@ function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 }
 
-export default async () => {
+export default async (req) => {
+  const _pt = process.env.SOCIAL_PROXY_TOKEN;
+  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
+  }
   const codes = Object.keys(SHEETS)
   if (!codes.length) return json({ ok: true, restaurants: [] })
   if (CACHE.data && Date.now() - CACHE.at < TTL_MS) return json({ ok: true, cached: true, ...CACHE.data })

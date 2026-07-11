@@ -4,6 +4,10 @@
 import { getStore } from '@netlify/blobs'
 
 export default async (req) => {
+  const _pt = process.env.SOCIAL_PROXY_TOKEN;
+  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
+  }
   if (req.method !== 'POST') return json({ ok: false, error: 'POST only' }, 405)
   try {
     const form = await req.formData()
