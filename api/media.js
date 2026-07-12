@@ -1,22 +1,19 @@
 // Back-compat: serve an uploaded image by id. With Vercel Blob, media-upload
 // already returns a direct public CDN URL, so this just redirects id -> blob.
+// Node runtime (edge can't use @vercel/blob).
 import { list } from "@vercel/blob";
 
-export const config = { runtime: "edge" };
-
-export default async function handler(req) {
+export default async function handler(req, res) {
   const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
-  }
-  const id = new URL(req.url).searchParams.get("id");
-  if (!id) return new Response("missing id", { status: 400 });
+  if (_pt && req.headers["x-proxy-token"] !== _pt) return res.status(401).json({ error: "unauthorized" });
+  const id = req.query.id;
+  if (!id) return res.status(400).send("missing id");
   try {
     const { blobs } = await list({ prefix: id });
     const b = blobs.find((x) => x.pathname === id) || blobs[0];
-    if (!b) return new Response("not found", { status: 404 });
-    return Response.redirect(b.url, 302);
+    if (!b) return res.status(404).send("not found");
+    return res.redirect(302, b.url);
   } catch (e) {
-    return new Response("error: " + String(e?.message || e), { status: 500 });
+    return res.status(500).send("error: " + String(e?.message || e));
   }
 }
