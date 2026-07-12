@@ -44,17 +44,27 @@ async function conversations(r, network) {
   }
 }
 
+// Fetch with a hard timeout so one slow Graph call can't stall the function.
+async function fetchJson(url, ms = 6000) {
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), ms)
+  try { return await (await fetch(url, { signal: ctl.signal })).json() }
+  finally { clearTimeout(t) }
+}
+
 // Instagram rejects the one-shot query above ("Please reduce the amount of
-// data you're asking for"), so fetch IG in two steps: a light conversation
-// list first, then each conversation's participants + messages individually.
+// data you're asking for"), even for light queries addressed to the PAGE id.
+// The variant Meta accepts is asking the IG user id for its conversations,
+// then fetching each conversation's participants + messages individually.
 async function igConversations(r) {
-  const listUrl = `${GRAPH}/${r.page_id}/conversations?platform=instagram&fields=id,updated_time&limit=8&access_token=${r.page_token}`
+  const owner = r.ig_id || r.page_id
+  const listUrl = `${GRAPH}/${owner}/conversations?platform=instagram&fields=id,updated_time&limit=5&access_token=${r.page_token}`
   try {
-    const list = await (await fetch(listUrl)).json()
+    const list = await fetchJson(listUrl)
     if (list.error) return { list: [], error: list.error.message }
     const convs = await Promise.all((list.data || []).map(async (c) => {
       try {
-        const d = await (await fetch(`${GRAPH}/${c.id}?fields=participants,updated_time,messages.limit(6){message,from,created_time}&access_token=${r.page_token}`)).json()
+        const d = await fetchJson(`${GRAPH}/${c.id}?fields=participants,updated_time,messages.limit(6){message,from,created_time}&access_token=${r.page_token}`)
         return d.error ? null : shapeConvo(d, r, 'instagram')
       } catch { return null }
     }))
@@ -76,10 +86,10 @@ export const handler = async (event) => {
   const results = await Promise.all(rs.map(async (r) => {
     const [fb, ig] = await Promise.all([conversations(r, 'facebook'), igConversations(r)])
     const list = [...fb.list, ...ig.list].sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))
-    return { code: r.code, conversations: list, fbError: fb.error, igError: ig.error }
+    return { code: r.code, v: 3, conversations: list, fbError: fb.error, igError: ig.error }
   }))
 
-  const data = { generated_at: new Date().toISOString(), restaurants: results }
+  const data = { generated_at: new Date().toISOString(), version: 3, restaurants: results }
   CACHE = { at: Date.now(), data }
   return json(200, { ok: true, ...data })
 }
