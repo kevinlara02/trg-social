@@ -44,6 +44,26 @@ async function conversations(r, network) {
   }
 }
 
+// Instagram rejects the one-shot query above ("Please reduce the amount of
+// data you're asking for"), so fetch IG in two steps: a light conversation
+// list first, then each conversation's participants + messages individually.
+async function igConversations(r) {
+  const listUrl = `${GRAPH}/${r.page_id}/conversations?platform=instagram&fields=id,updated_time&limit=8&access_token=${r.page_token}`
+  try {
+    const list = await (await fetch(listUrl)).json()
+    if (list.error) return { list: [], error: list.error.message }
+    const convs = await Promise.all((list.data || []).map(async (c) => {
+      try {
+        const d = await (await fetch(`${GRAPH}/${c.id}?fields=participants,updated_time,messages.limit(6){message,from,created_time}&access_token=${r.page_token}`)).json()
+        return d.error ? null : shapeConvo(d, r, 'instagram')
+      } catch { return null }
+    }))
+    return { list: convs.filter(Boolean), error: null }
+  } catch (e) {
+    return { list: [], error: String(e?.message || e) }
+  }
+}
+
 export const handler = async (event) => {
   const _pt = process.env.SOCIAL_PROXY_TOKEN;
   if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
@@ -54,7 +74,7 @@ export const handler = async (event) => {
 
   const rs = restaurants()
   const results = await Promise.all(rs.map(async (r) => {
-    const [fb, ig] = await Promise.all([conversations(r, 'facebook'), conversations(r, 'instagram')])
+    const [fb, ig] = await Promise.all([conversations(r, 'facebook'), igConversations(r)])
     const list = [...fb.list, ...ig.list].sort((a, b) => (b.updated || '').localeCompare(a.updated || ''))
     return { code: r.code, conversations: list, fbError: fb.error, igError: ig.error }
   }))
