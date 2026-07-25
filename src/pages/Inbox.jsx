@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageSquare, Reply, Send, Loader2, Check, ExternalLink, Mail, MessagesSquare } from 'lucide-react'
+import { MessageSquare, Reply, Send, Loader2, Check, ExternalLink, Mail, MessagesSquare, Sparkles } from 'lucide-react'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PlatformIcon } from '../components/ui/Platform'
@@ -7,6 +7,7 @@ import { LastUpdated } from '../components/ui/LastUpdated'
 import { ListSkeleton } from '../components/ui/Skeleton'
 import { TEMPLATES } from '../lib/templates'
 import { getComments, replyToComment, getSquarespaceMessages, getDms, replyToDm } from '../lib/live'
+import { aiSuggest } from '../lib/suggest'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
 
@@ -251,6 +252,7 @@ function DmCard({ convo }) {
           />
           {error && <p className="text-xs text-red-400">{error}</p>}
           <div className="flex items-center gap-2 flex-wrap">
+            <AiButton kind="message" item={{ author_name: convo.customer, body: convo.lastText, platform: convo.network }} location={loc?.name} onDraft={setText} />
             <TemplatePicker onPick={setText} />
             <button onClick={send} disabled={sending || !text.trim()} className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-400 disabled:opacity-50 text-zinc-950 text-sm font-semibold px-3 py-1.5 rounded-lg">
               {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {sending ? 'Sending…' : 'Send'}
@@ -351,6 +353,7 @@ function CommentCard({ comment, repliedText, onReplied }) {
                   />
                   {error && <p className="text-xs text-red-400">{error}</p>}
                   <div className="flex items-center gap-2 flex-wrap">
+                    <AiButton kind="message" item={{ author_name: comment.author, body: comment.text, platform: comment.network }} location={loc?.name} onDraft={setText} />
                     <TemplatePicker onPick={setText} />
                     <button onClick={send} disabled={sending || !text.trim()} className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-400 disabled:opacity-50 text-zinc-950 text-sm font-semibold px-3 py-1.5 rounded-lg">
                       {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {sending ? 'Sending…' : 'Send reply'}
@@ -364,6 +367,32 @@ function CommentCard({ comment, repliedText, onReplied }) {
         </div>
       </div>
     </div>
+  )
+}
+
+// Draft a reply with Claude (netlify/functions/ai-reply), then drop it into the
+// box for the person to read, edit and send. Never sends on its own. Available
+// to anyone signed in; only allowlisted users can actually send the reply.
+function AiButton({ kind, item, location, onDraft }) {
+  const [busy, setBusy] = useState(false)
+  async function go() {
+    setBusy(true)
+    try {
+      const { text } = await aiSuggest({ kind, item, location })
+      if (text) onDraft(text)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={go}
+      disabled={busy}
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-300 border border-accent-500/30 hover:bg-accent-500/10 disabled:opacity-50 px-3 py-1.5 rounded-lg"
+    >
+      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} {busy ? 'Writing…' : 'Suggest with AI'}
+    </button>
   )
 }
 
