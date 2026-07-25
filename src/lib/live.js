@@ -1,12 +1,25 @@
 // Calls the server-side functions for REAL Facebook/Instagram/Yelp data.
 // Each returns null if unavailable (e.g. local dev or before the env var is
 // set), so the UI gracefully falls back / shows an empty state.
+import { supabase } from './supabase'
+
+// Every function is guarded server-side, so attach the current Supabase session
+// access token (the app's identity) to each request. Merges any extra headers.
+async function authHeaders(extra = {}) {
+  try {
+    const { data } = await supabase.auth.getSession()
+    const token = data?.session?.access_token
+    return token ? { ...extra, Authorization: `Bearer ${token}` } : { ...extra }
+  } catch {
+    return { ...extra }
+  }
+}
 
 async function getJson(path, timeoutMs = 8000) {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    const res = await fetch(path, { signal: ctrl.signal })
+    const res = await fetch(path, { signal: ctrl.signal, headers: await authHeaders() })
     clearTimeout(timer)
     if (!res.ok) return null
     const data = await res.json()
@@ -44,7 +57,7 @@ export async function replyToDm({ code, customerId, text }) {
   try {
     const res = await fetch('/.netlify/functions/meta-dm-reply', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await authHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify({ code, customerId, text }),
     })
     return await res.json()
@@ -74,7 +87,7 @@ export async function getTrends(timeoutMs = 10000) {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    const res = await fetch('/.netlify/functions/trends', { signal: ctrl.signal })
+    const res = await fetch('/.netlify/functions/trends', { signal: ctrl.signal, headers: await authHeaders() })
     clearTimeout(timer)
     if (!res.ok) return null
     const data = await res.json()
@@ -91,7 +104,7 @@ export async function getPublishedPosts(timeoutMs = 10000) {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    const res = await fetch('/.netlify/functions/posts', { signal: ctrl.signal })
+    const res = await fetch('/.netlify/functions/posts', { signal: ctrl.signal, headers: await authHeaders() })
     clearTimeout(timer)
     if (!res.ok) return []
     const data = await res.json()
@@ -104,7 +117,7 @@ export async function uploadMedia(file) {
   try {
     const fd = new FormData()
     fd.append('file', file)
-    const res = await fetch('/.netlify/functions/media-upload', { method: 'POST', body: fd })
+    const res = await fetch('/.netlify/functions/media-upload', { method: 'POST', body: fd, headers: await authHeaders() })
     return await res.json()
   } catch (err) { return { ok: false, error: String(err?.message || err) } }
 }
@@ -114,7 +127,7 @@ export async function publishPost({ code, networks, caption, image_url }) {
   try {
     const res = await fetch('/.netlify/functions/meta-publish', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await authHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify({ code, networks, caption, image_url }),
     })
     return await res.json()
@@ -122,12 +135,15 @@ export async function publishPost({ code, networks, caption, image_url }) {
 }
 
 // Records a published post into the history (so the calendar/list shows it).
-export function recordPost(record) {
-  return fetch('/.netlify/functions/posts', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(record),
-  }).then((r) => r.json()).catch(() => null)
+export async function recordPost(record) {
+  try {
+    const res = await fetch('/.netlify/functions/posts', {
+      method: 'POST',
+      headers: await authHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify(record),
+    })
+    return await res.json()
+  } catch { return null }
 }
 
 // Post a reply to a comment. Returns { ok, id } or { ok:false, error }.
@@ -135,7 +151,7 @@ export async function replyToComment({ code, network, comment_id, message }) {
   try {
     const res = await fetch('/.netlify/functions/meta-comment-reply', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await authHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify({ code, network, comment_id, message }),
     })
     return await res.json()

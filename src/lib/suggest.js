@@ -2,7 +2,21 @@
 // (netlify/functions/ai-reply.js); offline / in the demo they fall back to a
 // smart, bilingual local draft so the feature still works.
 
+import { supabase } from './supabase'
+
 const AI_ENDPOINT = '/.netlify/functions/ai-reply'
+
+// Attach the current Supabase session token so the guarded ai-reply function
+// accepts the request (any authenticated user may draft replies).
+async function authHeaders(extra = {}) {
+  try {
+    const { data } = await supabase.auth.getSession()
+    const token = data?.session?.access_token
+    return token ? { ...extra, Authorization: `Bearer ${token}` } : { ...extra }
+  } catch {
+    return { ...extra }
+  }
+}
 
 function isSpanish(text = '') {
   const t = text.toLowerCase()
@@ -55,7 +69,7 @@ export async function aiSuggest({ kind, item, location }) {
     }
     const res = await fetch(AI_ENDPOINT, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await authHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify(payload),
     })
     if (!res.ok) throw new Error('ai unavailable')

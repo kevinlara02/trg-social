@@ -1,6 +1,8 @@
 // Reads recent direct-message conversations for each restaurant's Facebook Page
 // (and Instagram, best-effort) using the page token (needs pages_messaging).
 // Reads META_CREDENTIALS_JSON from the Netlify env, like the other meta-* funcs.
+import { authorize } from './_authz.mjs'
+
 const GRAPH = 'https://graph.facebook.com/v25.0'
 let CACHE = { at: 0, data: null }
 const TTL_MS = 3 * 60 * 1000
@@ -75,8 +77,8 @@ async function igConversations(r) {
 }
 
 export const handler = async (event) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+  const authz = await authorize((n) => event?.headers?.[n]);
+  if (!authz.ok) {
     return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
   }
   if (!process.env.META_CREDENTIALS_JSON) return json(503, { ok: false, error: 'META_CREDENTIALS_JSON not configured', restaurants: [] })

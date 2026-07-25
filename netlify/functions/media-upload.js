@@ -2,11 +2,15 @@
 // Netlify Blob, and returns a public URL that Instagram/Facebook can fetch.
 // v2 function so Netlify Blobs auto-configures.
 import { getStore } from '@netlify/blobs'
+import { authorize, canWrite } from './_authz.mjs'
 
 export default async (req) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
+  const authz = await authorize((n) => req.headers.get(n));
+  if (!authz.ok) {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
+  }
+  if (!authz.viaToken && !canWrite(authz.email)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { "content-type": "application/json" } });
   }
   if (req.method !== 'POST') return json({ ok: false, error: 'POST only' }, 405)
   try {

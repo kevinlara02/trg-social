@@ -4,6 +4,7 @@
 // SHEETS once the user connects the forms and shares the sheet with the
 // service-account email. spreadsheetId = the long id in the sheet URL.
 import { getAccessToken } from '../google-auth.js'
+import { authorize } from './_authz.mjs'
 
 const SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 let CACHE = { at: 0, data: null }
@@ -63,8 +64,8 @@ function json(body, status = 200) {
 }
 
 export default async (req) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
+  const authz = await authorize((n) => req.headers.get(n));
+  if (!authz.ok) {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
   }
   const codes = Object.keys(SHEETS)

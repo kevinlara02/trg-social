@@ -3,10 +3,11 @@
 // scheduled runs).
 // v2 function (export default): Netlify Blobs auto-configures in this format.
 import { ensureToday } from '../snapshot-core.js'
+import { authorize } from './_authz.mjs'
 
 export default async (req) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
+  const authz = await authorize((n) => req.headers.get(n));
+  if (!authz.ok) {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
   }
   try {

@@ -2,6 +2,7 @@
 // Publish page calendar/list can show what's been posted. v2 function.
 // GET -> { ok, posts }. POST { code, networks, caption, image_url, results } -> appends.
 import { getStore } from '@netlify/blobs'
+import { authorize, canWrite } from './_authz.mjs'
 
 const KEY = 'history.json'
 const MAX = 500
@@ -11,9 +12,14 @@ function json(body, status = 200) {
 }
 
 export default async (req) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
+  const authz = await authorize((n) => req.headers.get(n));
+  if (!authz.ok) {
     return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
+  }
+  // GET (viewing published history) is open to any authenticated user; POST
+  // (recordPost) writes a post record, so it requires the WRITE allowlist.
+  if (req.method === 'POST' && !authz.viaToken && !canWrite(authz.email)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { "content-type": "application/json" } });
   }
   const store = getStore('posts')
   try {

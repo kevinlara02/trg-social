@@ -7,6 +7,8 @@
 //     META_CREDENTIALS_JSON = {"restaurants":[{"code":"TB","page_id":"...","page_token":"...","ig_id":"..."}, ...]}
 //   (generate the value locally with:  node make-netlify-env.mjs)
 
+import { authorize } from './_authz.mjs'
+
 const GRAPH = 'https://graph.facebook.com/v25.0'
 
 // Small in-memory cache so we don't hit the Graph API on every page load
@@ -56,8 +58,8 @@ function json(statusCode, body) {
 }
 
 export const handler = async (event) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+  const authz = await authorize((n) => event?.headers?.[n]);
+  if (!authz.ok) {
     return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
   }
   const raw = process.env.META_CREDENTIALS_JSON

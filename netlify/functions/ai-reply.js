@@ -6,6 +6,7 @@
 //   1. Add ANTHROPIC_API_KEY in Netlify > Site settings > Environment variables.
 //   2. (Optional) Set AI_MODEL to use a cheaper model, e.g. claude-haiku-4-5.
 import Anthropic from '@anthropic-ai/sdk'
+import { authorize } from './_authz.mjs'
 
 const MODEL = process.env.AI_MODEL || 'claude-opus-4-8'
 
@@ -21,8 +22,8 @@ Rules:
 - Output ONLY the reply text, nothing else.`
 
 export const handler = async (event) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+  const authz = await authorize((n) => event?.headers?.[n]);
+  if (!authz.ok) {
     return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
   }
   if (event.httpMethod !== 'POST') {

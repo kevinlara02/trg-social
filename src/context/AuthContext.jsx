@@ -4,13 +4,24 @@ import { DEMO, demoProfile } from '../lib/demo'
 
 const AuthContext = createContext(null)
 
+// Owner-named WRITE allowlist (must match netlify/functions/_authz.mjs). Only
+// these three get an admin fallback profile; everyone else views only.
+const WRITE_ALLOWLIST = [
+  'kevin@toastrestaurantgroup.com',
+  'cynthia@toastrestaurantgroup.com',
+  'ginger@toastrestaurantgroup.com',
+]
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(!DEMO) // demo: nothing to load
 
-  // Load the signed-in user's profile (role + assigned restaurant)
-  async function fetchProfile(userId) {
+  // Load the signed-in user's profile (role + assigned restaurant). TRG-OS
+  // users have no row in THIS project's profiles table, so an authenticated
+  // user with no row gets a usable fallback profile (never locked out).
+  async function fetchProfile(user) {
+    const userId = user?.id
     if (!userId) return null
     try {
       const { data } = await supabase
@@ -18,9 +29,18 @@ export function AuthProvider({ children }) {
         .select('id, full_name, email, role, location_id, active')
         .eq('id', userId)
         .single()
-      return data || null
+      if (data) return data
     } catch {
-      return null
+      // no row / query failed: fall through to the fallback below
+    }
+    const email = (user?.email || '').toLowerCase()
+    return {
+      id: userId,
+      full_name: user?.email || 'TRG user',
+      email,
+      location_id: null,
+      active: true,
+      role: WRITE_ALLOWLIST.includes(email) ? 'admin' : 'staff',
     }
   }
 
@@ -34,7 +54,7 @@ export function AuthProvider({ children }) {
         if (!active) return
         const s = data?.session ?? null
         setSession(s)
-        setProfile(await fetchProfile(s?.user?.id))
+        setProfile(await fetchProfile(s?.user))
       })
       .catch(() => {})
       .finally(() => { if (active) setLoading(false) })
@@ -45,7 +65,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       if (!active) return
       setSession(s)
-      fetchProfile(s?.user?.id).then((p) => { if (active) setProfile(p) })
+      fetchProfile(s?.user).then((p) => { if (active) setProfile(p) })
     })
 
     return () => { active = false; subscription?.unsubscribe() }

@@ -3,6 +3,8 @@
 // endpoint returns NOT_FOUND), but business details (rating, count, price,
 // url) work fine. Reads YELP_API_KEY from the Netlify env (stays server-side).
 
+import { authorize } from './_authz.mjs'
+
 const YELP = 'https://api.yelp.com/v3'
 
 let CACHE = { at: 0, data: null }
@@ -61,8 +63,8 @@ function json(statusCode, body) {
 }
 
 export const handler = async (event) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+  const authz = await authorize((n) => event?.headers?.[n]);
+  if (!authz.ok) {
     return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
   }
   const key = process.env.YELP_API_KEY

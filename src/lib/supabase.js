@@ -1,9 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 import { DEMO, demoClient } from './demo'
 
-// Fall back to placeholders so the app still renders before .env is configured.
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key'
+// Fall back to the TRG-OS Supabase project so login works even without Netlify
+// build env vars. Both values are PUBLIC (safe in the bundle), not secrets.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://sfwahdvmyyrowfvjdlnl.supabase.co'
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_3-LogL948oijZz5IQHLDtg_uYvUVSlK'
 
 // In DEMO mode we use an in-memory client with sample data; otherwise the real one.
 export const supabase = DEMO ? demoClient : createClient(supabaseUrl, supabaseAnonKey)

@@ -4,6 +4,8 @@
 //
 // POST body: { code, network, comment_id, message }
 
+import { authorize, canWrite } from './_authz.mjs'
+
 const GRAPH = 'https://graph.facebook.com/v25.0'
 
 function json(statusCode, body) {
@@ -15,9 +17,12 @@ function json(statusCode, body) {
 }
 
 export const handler = async (event) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && (!event || !event.headers || event.headers["x-proxy-token"] !== _pt)) {
+  const authz = await authorize((n) => event?.headers?.[n]);
+  if (!authz.ok) {
     return { statusCode: 401, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "unauthorized" }) };
+  }
+  if (!authz.viaToken && !canWrite(authz.email)) {
+    return { statusCode: 403, headers: { "content-type": "application/json" }, body: JSON.stringify({ error: "forbidden" }) };
   }
   if (event.httpMethod !== 'POST') return json(405, { ok: false, error: 'Method not allowed' })
 

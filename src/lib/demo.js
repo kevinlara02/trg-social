@@ -6,7 +6,7 @@
 // Instagram (Traffic page), which comes from the meta-live function,
 // independent of this seed.
 // ============================================================
-export const DEMO = true
+export const DEMO = false
 
 export const demoProfile = {
   id: 'demo-admin', full_name: 'Kevin', email: 'kevin@toastrestaurantgroup.com',

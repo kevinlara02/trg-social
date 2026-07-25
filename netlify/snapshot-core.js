@@ -20,8 +20,12 @@ function today() {
 // rating/reviews + Instagram/Facebook follower counts, merged by restaurant.
 async function fetchCurrent() {
   const b = base()
+  // yelp-ratings + meta-live are guarded; the scheduled/read path here has no
+  // user session, so authenticate via the server proxy token when it is set.
+  const token = process.env.SOCIAL_PROXY_TOKEN
+  const headers = token ? { 'x-proxy-token': token } : {}
   const grab = (path) =>
-    fetch(`${b}${path}`).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    fetch(`${b}${path}`, { headers }).then((r) => (r.ok ? r.json() : null)).catch(() => null)
   const [yelpRes, metaRes] = await Promise.all([
     grab('/.netlify/functions/yelp-ratings'),
     grab('/.netlify/functions/meta-live'),

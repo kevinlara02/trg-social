@@ -2,11 +2,12 @@
 // Instagram/Facebook can fetch it when publishing). v2 function.
 import { getStore } from '@netlify/blobs'
 
+// PUBLIC ON PURPOSE: this endpoint serves an opaque random-id image that the app
+// is about to post publicly. It must stay open because the consumers cannot send
+// an Authorization header: Instagram/Facebook fetch this image_url server-side
+// and anonymously when publishing, and a plain <img> tag has no way to attach a
+// bearer token. Gating it would break image publishing and history thumbnails.
 export default async (req) => {
-  const _pt = process.env.SOCIAL_PROXY_TOKEN;
-  if (_pt && req.headers.get("x-proxy-token") !== _pt) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
-  }
   const id = new URL(req.url).searchParams.get('id')
   if (!id) return new Response('missing id', { status: 400 })
   try {
