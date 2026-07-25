@@ -159,3 +159,30 @@ export async function replyToComment({ code, network, comment_id, message }) {
     return { ok: false, error: String(err?.message || err) }
   }
 }
+
+// Shared inbox state (which comment/DM the team has already handled, plus the
+// reply text). Persisted in Netlify Blobs so it survives reload and is shared
+// across staff. Returns a map { [id]: { replied, text, kind, by, at } }.
+export async function getInboxState() {
+  try {
+    const res = await fetch('/.netlify/functions/inbox-state', { headers: await authHeaders() })
+    if (!res.ok) return {}
+    const data = await res.json()
+    return data?.state || {}
+  } catch {
+    return {}
+  }
+}
+
+// Records that a comment/DM was answered (best effort; the reply already sent).
+export async function recordReply({ id, kind, text }) {
+  try {
+    await fetch('/.netlify/functions/inbox-state', {
+      method: 'POST',
+      headers: await authHeaders({ 'content-type': 'application/json' }),
+      body: JSON.stringify({ id, kind, text, replied: true }),
+    })
+  } catch {
+    // best effort
+  }
+}

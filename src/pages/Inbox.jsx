@@ -6,7 +6,7 @@ import { PlatformIcon } from '../components/ui/Platform'
 import { LastUpdated } from '../components/ui/LastUpdated'
 import { ListSkeleton } from '../components/ui/Skeleton'
 import { TEMPLATES } from '../lib/templates'
-import { getComments, replyToComment, getSquarespaceMessages, getDms, replyToDm } from '../lib/live'
+import { getComments, replyToComment, getSquarespaceMessages, getDms, replyToDm, getInboxState, recordReply } from '../lib/live'
 import { aiSuggest } from '../lib/suggest'
 
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
@@ -24,6 +24,18 @@ export default function Inbox() {
   const [view, setView] = useState('comments') // 'comments' | 'messages'
   const [updatedAt, setUpdatedAt] = useState(null)
   const [tick, setTick] = useState(0)
+
+  // Hydrate the shared "handled" state so a reply someone already sent shows as
+  // replied for the whole team and survives a reload (Netlify Blobs, no DB).
+  useEffect(() => {
+    getInboxState().then((state) => {
+      const seed = {}
+      for (const [id, v] of Object.entries(state || {})) {
+        if (v?.replied) seed[id] = v.text || '(replied)'
+      }
+      if (Object.keys(seed).length) setReplied((prev) => ({ ...seed, ...prev }))
+    })
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -122,7 +134,7 @@ export default function Inbox() {
                   key={c.id}
                   comment={c}
                   repliedText={replied[c.id]}
-                  onReplied={(text) => setReplied((prev) => ({ ...prev, [c.id]: text }))}
+                  onReplied={(text) => { setReplied((prev) => ({ ...prev, [c.id]: text })); recordReply({ id: c.id, kind: 'comment', text }) }}
                 />
               ))}
             </div>
@@ -198,6 +210,7 @@ function DmCard({ convo }) {
     setSending(false)
     if (res?.ok) {
       setSent((prev) => [...prev, { fromUs: true, author: 'You', text: message, time: new Date().toISOString() }])
+      recordReply({ id: convo.id, kind: 'dm', text: message })
       setText(''); setOpen(false)
     } else {
       setError(res?.error || 'Could not send. Facebook only allows replies within 24h of the last customer message.')
