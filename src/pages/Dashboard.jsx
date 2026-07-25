@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Star, Users, Heart, Image as ImageIcon, AlertTriangle, ArrowRight, TrendingUp, Globe, MessageSquare } from 'lucide-react'
+import { Star, Users, Heart, Image as ImageIcon, AlertTriangle, ArrowRight, TrendingUp, Globe, MessageSquare, MessagesSquare } from 'lucide-react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { LOCATIONS, locationById } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
@@ -8,7 +8,7 @@ import { PlatformIcon } from '../components/ui/Platform'
 import { LastUpdated } from '../components/ui/LastUpdated'
 import { KpiSkeleton, ChartSkeleton } from '../components/ui/Skeleton'
 import { delta, DeltaTag } from '../components/ui/Delta'
-import { getYelp, getLivePosts, getGa4 } from '../lib/live'
+import { getYelp, getLivePosts, getGa4, getComments, getDms, getInboxState } from '../lib/live'
 
 const fmtNum = (n) => (n == null ? '–' : n >= 1000 ? (n / 1000).toFixed(1).replace('.0', '') + 'k' : `${n}`)
 const locByCode = (code) => LOCATIONS.find((l) => l.code === code)
@@ -21,14 +21,17 @@ export default function Dashboard() {
   const [yelp, setYelp] = useState(null)
   const [posts, setPosts] = useState(null)
   const [ga4, setGa4] = useState(null)
+  const [comments, setComments] = useState(null)
+  const [dms, setDms] = useState(null)
+  const [inbox, setInbox] = useState({})
   const [updatedAt, setUpdatedAt] = useState(null)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let active = true
     setLoading(true)
-    Promise.all([getYelp(), getLivePosts(), getGa4()]).then(([y, p, g]) => {
-      if (active) { setYelp(y); setPosts(p); setGa4(g); setUpdatedAt(Date.now()); setLoading(false) }
+    Promise.all([getYelp(), getLivePosts(), getGa4(), getComments(), getDms(), getInboxState()]).then(([y, p, g, c, d, ib]) => {
+      if (active) { setYelp(y); setPosts(p); setGa4(g); setComments(c); setDms(d); setInbox(ib || {}); setUpdatedAt(Date.now()); setLoading(false) }
     })
     return () => { active = false }
   }, [tick])
@@ -56,6 +59,20 @@ export default function Dashboard() {
   const visitorChart = ga4Rows.map((r) => ({ name: r.code, visitors: r.users || 0, color: locByCode(r.code)?.color })).filter((d) => d.visitors > 0).sort((a, b) => b.visitors - a.visitors)
   const lowest = yelpChart.length > 1 ? yelpChart[yelpChart.length - 1] : null
 
+  // "Needs attention": what a manager should act on today, computed from the
+  // live data plus the shared handled-state. All read, nothing invented.
+  const commentRows = useMemo(() => (comments || []).flatMap((r) => (r.comments || []).map((c) => ({ ...c, code: r.code }))).filter((c) => inScope(c.code)), [comments, isAdmin, scopedCode])
+  const dmRows = useMemo(() => (dms || []).flatMap((r) => (r.conversations || []).map((c) => ({ ...c, code: r.code }))).filter((c) => inScope(c.code)), [dms, isAdmin, scopedCode])
+  const unansweredComments = commentRows.filter((c) => !inbox[c.id]?.replied).length
+  const waitingDms = dmRows.filter((c) => c.lastFromUs === false && !inbox[c.id]?.replied).length
+  const lowRated = yelpRows.filter((r) => r.rating < 4.0)
+
+  const attention = []
+  if (unansweredComments > 0) attention.push({ icon: MessageSquare, text: `${unansweredComments} unanswered ${unansweredComments === 1 ? 'comment' : 'comments'}`, to: '/inbox' })
+  if (waitingDms > 0) attention.push({ icon: MessagesSquare, text: `${waitingDms} ${waitingDms === 1 ? 'message is' : 'messages are'} waiting for a reply`, to: '/inbox' })
+  if (lowRated.length > 0) attention.push({ icon: Star, text: lowRated.length === 1 ? `${locByCode(lowRated[0].code)?.name} is below 4.0 stars (${lowRated[0].rating}★)` : `${lowRated.length} restaurants are below 4.0 stars`, to: '/reviews' })
+  else if (lowest) attention.push({ icon: Star, text: `${locByCode(lowest.name)?.name} has the lowest rating (${lowest.rating}★)`, to: '/reviews' })
+
   return (
     <div className="p-4 md:p-8 max-w-7xl">
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -82,14 +99,25 @@ export default function Dashboard() {
             <Kpi icon={MessageSquare} label="Yelp Reviews" value={fmtNum(totalReviews)} />
           </div>
 
-          {lowest && (
-            <Link to={`/locations/${lowest.name}`} className="flex items-center gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 mb-6 hover:bg-amber-500/15 transition-colors">
-              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-              <p className="text-sm text-amber-100 flex-1">
-                <span className="font-medium">{locByCode(lowest.name)?.name}</span> has the lowest Yelp rating ({lowest.rating}★). Worth a look.
-              </p>
-              <ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
-            </Link>
+          {attention.length > 0 && (
+            <div className="rounded-2xl bg-amber-500/10 border border-amber-500/20 p-4 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                <h2 className="font-semibold text-amber-100">Needs attention</h2>
+              </div>
+              <div className="space-y-2">
+                {attention.map((it, i) => {
+                  const Icon = it.icon
+                  return (
+                    <Link key={i} to={it.to} className="flex items-center gap-3 rounded-xl bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/10 px-3 py-2 transition-colors">
+                      <Icon className="w-4 h-4 text-amber-300 shrink-0" />
+                      <span className="text-sm text-amber-100 flex-1">{it.text}</span>
+                      <ArrowRight className="w-4 h-4 text-amber-400 shrink-0" />
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
           )}
 
           {visitorChart.length > 0 && (
