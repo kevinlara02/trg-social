@@ -120,6 +120,7 @@ export function AuthProvider({ children }) {
       isManager,
       scopedLocationId,
       signIn,
+      signInWithLink,
       signOut,
     }}>
       {children}
