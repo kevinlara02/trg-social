@@ -82,6 +82,21 @@ export function AuthProvider({ children }) {
     return error ? error.message : null
   }
 
+  // Passwordless: email the user a one-time sign-in link. Only sends to people
+  // who already have a TRG-OS account (shouldCreateUser:false), and returns
+  // them to this app so the session is established on click.
+  async function signInWithLink(email) {
+    if (DEMO) return null
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: window.location.origin,
+      },
+    })
+    return error ? error.message : null
+  }
+
   async function signOut() {
     if (DEMO) { setSession(null); setProfile(null); return }
     await supabase.auth.signOut()

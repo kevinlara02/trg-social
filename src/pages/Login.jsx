@@ -9,7 +9,9 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
-  const { signIn } = useAuth()
+  const [linkSent, setLinkSent] = useState(false)
+  const [linkLoading, setLinkLoading] = useState(false)
+  const { signIn, signInWithLink } = useAuth()
   const navigate = useNavigate()
 
   async function handleSubmit(e) {
@@ -22,6 +24,22 @@ export default function Login() {
       setLoading(false)
     } else {
       navigate('/dashboard')
+    }
+  }
+
+  async function handleEmailLink() {
+    setError('')
+    if (!email) {
+      setError('Type your email above first, then tap the link button.')
+      return
+    }
+    setLinkLoading(true)
+    const err = await signInWithLink(email)
+    setLinkLoading(false)
+    if (err) {
+      setError('Could not send the link. Check the email and try again.')
+    } else {
+      setLinkSent(true)
     }
   }
 
@@ -86,6 +104,32 @@ export default function Login() {
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
+
+        {linkSent ? (
+          <div className="mt-6 bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 px-4 py-3 rounded-xl text-sm text-center">
+            Check your email. We sent a sign-in link to <span className="font-medium">{email}</span>.
+            Open it on this device to sign in, no password needed.
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 my-6">
+              <div className="h-px flex-1 bg-zinc-800" />
+              <span className="text-xs text-zinc-600 uppercase tracking-wide">or</span>
+              <div className="h-px flex-1 bg-zinc-800" />
+            </div>
+            <button
+              type="button"
+              onClick={handleEmailLink}
+              disabled={linkLoading}
+              className="w-full border border-zinc-700 hover:border-zinc-600 hover:bg-zinc-900 disabled:opacity-50 text-zinc-200 font-medium py-3.5 rounded-xl transition-colors text-base"
+            >
+              {linkLoading ? 'Sending link…' : 'Email me a sign-in link'}
+            </button>
+            <p className="text-xs text-zinc-600 text-center mt-3">
+              No password needed. We email you a link that signs you in.
+            </p>
+          </>
+        )}
       </div>
     </div>
   )
