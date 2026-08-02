@@ -28,7 +28,7 @@ async function fetchRestaurant(r) {
   if (!r.page_token) return { code: r.code, posts: [] }
   const [acct, igMedia, fbPosts, fbInfo] = await Promise.all([
     r.ig_id ? api(r.ig_id, { fields: 'username,followers_count,media_count', access_token: r.page_token }) : Promise.resolve({}),
-    r.ig_id ? api(`${r.ig_id}/media`, { fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count', limit: '8', access_token: r.page_token }) : Promise.resolve({}),
+    r.ig_id ? api(`${r.ig_id}/media`, { fields: 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count', limit: '12', access_token: r.page_token }) : Promise.resolve({}),
     r.page_id ? api(`${r.page_id}/posts`, { fields: 'id,message,full_picture,permalink_url,created_time', limit: '6', access_token: r.page_token }) : Promise.resolve({}),
     r.page_id ? api(r.page_id, { fields: 'followers_count,fan_count', access_token: r.page_token }) : Promise.resolve({}),
   ])
@@ -37,6 +37,10 @@ async function fetchRestaurant(r) {
     id: m.id,
     network: 'instagram',
     image: m.media_type === 'VIDEO' ? (m.thumbnail_url || null) : (m.media_url || null),
+    // Passed through so a consumer can mark a video without guessing. The
+    // restaurant websites draw a play triangle on video tiles, and inferring it
+    // from a /reel/ permalink misses a plain VIDEO post that is not a reel.
+    media_type: m.media_type || null,
     caption: m.caption || '',
     permalink: m.permalink || null,
     date: m.timestamp || null,
