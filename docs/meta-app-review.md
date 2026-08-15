@@ -33,24 +33,54 @@ own restaurant Instagram accounts. Facebook DMs (`pages_messaging`) already work
 
 ## Reviewer test instructions (paste into "How to test")
 > 1. Open https://trg-socialmedia.netlify.app
-> 2. Sign in (this internal demo accepts any email and password and logs you in as an admin).
+> 2. Sign in with the review credentials we supplied in the submission notes.
 > 3. In the left menu, open **Inbox**.
 > 4. At the top of Inbox, click the **Direct Messages** tab.
-> 5. You will see message threads pulled live from our connected Pages/accounts, grouped by
->    restaurant. Facebook Messenger threads are shown today; once `instagram_manage_messages`
->    is approved, Instagram Direct threads appear in the same view.
+> 5. You will see message threads pulled live from our connected Pages and Instagram
+>    Business accounts, grouped by restaurant, including Instagram Direct threads.
 > 6. Open a thread and use the reply box at the bottom to send a response; it is delivered
 >    to the customer through the Meta API as the Page/account.
 
+<!--
+LEER ANTES DE ENVIAR. Dos cosas de arriba ya nos habrian costado un rechazo:
+
+1. El paso 2 decia "accepts any email and password and logs you in as an admin".
+   Eso es FALSO desde que `src/lib/demo.js` tiene `DEMO = false`: el login es real
+   contra Supabase. Un revisor que lo intentara no entraria, y la solicitud se cae
+   por "no pudimos probar la app". Hay que crear un usuario de revision de verdad y
+   poner ese correo y esa clave en las notas de la solicitud.
+
+2. El paso 5 decia que los hilos de Instagram "appear once instagram_manage_messages
+   is approved". Meta NO aprueba un permiso que no vio funcionando; pedirle al
+   revisor que imagine el resultado es rechazo directo.
+
+   COMO SE DEMUESTRA DE VERDAD: en Standard Access el permiso YA sirve para personas
+   que tienen un rol en la app. Entonces, antes de grabar:
+     a. En App Roles, agrega como Tester la cuenta personal de quien va a grabar.
+     b. Esa persona acepta la invitacion y le manda un DM de Instagram a uno de los
+        restaurantes desde su Instagram personal.
+     c. Ese hilo SI entra por la API, y ahi se graba leyendolo y contestandolo.
+
+3. ENSAYAR ANTES DE GRABAR. Medido el 2026-08-15: listar conversaciones de Instagram
+   devuelve Timeout subcode 2534084 en las cuentas con mucho volumen. Grabar con la
+   cuenta que tenga MENOS conversaciones, y verificar que la bandeja carga antes de
+   empezar a grabar.
+-->
+
 ## Demo screencast script (record a 60–90s video)
-1. Show the homepage/login; sign in.
+0. ANTES: agrega como Tester (App Roles) la cuenta personal de quien graba, que acepte
+   la invitacion, y que le mande un DM de Instagram al restaurante. Sin ese paso no hay
+   nada de Instagram que ensenar y la solicitud se cae.
+1. Show the homepage/login; sign in with the review account.
 2. Click **Inbox → Direct Messages**. Narrate: "This is our internal inbox for all
    restaurant accounts."
-3. Open a Facebook Messenger thread; scroll the conversation. Narrate: "We read guest
-   messages here and reply as the restaurant."
-4. Type a reply and send it. Narrate: "The reply is delivered through the Meta API."
-5. Narrate the ask: "We are requesting Instagram messaging so Instagram Direct messages
-   appear in this same inbox and our team can respond to them the same way."
+3. Open the **Instagram** thread; scroll the conversation. Narrate: "We read guest
+   messages here and reply as the restaurant." Ensena tambien un hilo de Messenger para
+   que se vea que es una sola bandeja.
+4. Type a reply and send it, and show it arriving on the tester's phone. Narrate: "The
+   reply is delivered through the Meta API."
+5. Narrate the ask: "We are requesting Advanced Access so we can do exactly this with
+   messages from guests who do not have a role on our app."
 6. Briefly show the **Comments** tab (already live IG+FB comments) to prove the app already
    works with our Instagram accounts for reading/replying to comments.
 
